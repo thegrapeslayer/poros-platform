@@ -7,7 +7,7 @@ export interface DiseaseSummary {
   slug: string;
   disease_id?: string;
   trs: number | null;
-  domains?: Record<string, number | null>;
+  domains?: Record<string, number | null> | null;
   ascertainment_completeness?: number | null;
   evidence_coverage?: number | null;
   risk_band: RiskBand;

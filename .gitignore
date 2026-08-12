@@ -1,6 +1,8 @@
 node_modules/
 .next/
-backend/data/
+backend/app/data/
 __pycache__/
 *.pyc
 .env.local
+.venv/
+*.log

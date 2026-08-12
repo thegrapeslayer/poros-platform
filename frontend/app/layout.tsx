@@ -4,9 +4,12 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "RDTI — Rare Disease Translation Initiative",
+  title: "POROS — Rare Disease Translation Initiative",
   description:
     "Identifying where promising rare disease therapies stall between biological discovery and patient access.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

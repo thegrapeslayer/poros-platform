@@ -1,17 +1,82 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDisease } from "@/lib/api";
 import RiskBadge from "@/components/RiskBadge";
 import DomainBars from "@/components/DomainBars";
 import EvidenceSection from "@/components/EvidenceSection";
 
-export default async function DiseaseDetailPage({ params }: { params: { slug: string } }) {
-  let disease;
+type FetchState =
+  | { kind: "ok"; disease: Awaited<ReturnType<typeof getDisease>> }
+  | { kind: "not-in-portfolio" }
+  | { kind: "not-scored" }
+  | { kind: "error" };
+
+async function loadDisease(slug: string): Promise<FetchState> {
   try {
-    disease = await getDisease(params.slug);
+    const disease = await getDisease(slug);
+    return { kind: "ok", disease };
   } catch (e) {
+    const message = e instanceof Error ? e.message : "";
+    // Backend distinguishes "not in the fixed portfolio at all" (true 404, unslugify
+    // failed) from "in the portfolio but never scored yet" (no snapshot) — see
+    // backend/app/main.py get_disease() and docs/ARCHITECTURE.md "Routing / slug
+    // contract". Only the first case is a real not-found page; the second is a normal,
+    // expected state for a disease that hasn't had /api/admin/refresh run for it yet.
+    if (message.includes("Unknown disease slug")) {
+      return { kind: "not-in-portfolio" };
+    }
+    if (message.includes("No snapshot")) {
+      return { kind: "not-scored" };
+    }
+    return { kind: "error" };
+  }
+}
+
+export default async function DiseaseDetailPage({ params }: { params: { slug: string } }) {
+  const state = await loadDisease(params.slug);
+
+  // Called directly in the page (not inside loadDisease) so Next.js's App Router
+  // correctly attaches the 404 status to the response, not just the not-found UI.
+  if (state.kind === "not-in-portfolio") {
     notFound();
   }
-  if (!disease) notFound();
+
+  if (state.kind === "not-scored") {
+    return (
+      <div className="max-w-2xl mx-auto px-6 py-24 text-center">
+        <p className="eyebrow text-muted mb-3">Not yet scored</p>
+        <h1 className="font-display text-2xl text-ink mb-4">
+          This disease is in the POROS portfolio but doesn&rsquo;t have a scored snapshot yet.
+        </h1>
+        <p className="text-ink/70 leading-relaxed mb-8">
+          Its evidence hasn&rsquo;t been retrieved and scored yet. Run{" "}
+          <code className="font-mono text-sm">POST /api/admin/refresh</code> against the backend to fetch
+          current evidence for the portfolio, then reload this page.
+        </p>
+        <Link href="/portfolio" className="text-sm text-sage-dark hover:underline">
+          &larr; Back to the portfolio
+        </Link>
+      </div>
+    );
+  }
+
+  if (state.kind === "error") {
+    return (
+      <div className="max-w-2xl mx-auto px-6 py-24 text-center">
+        <p className="eyebrow text-muted mb-3">Couldn&rsquo;t load this disease</p>
+        <h1 className="font-display text-2xl text-ink mb-4">The POROS API didn&rsquo;t respond as expected.</h1>
+        <p className="text-ink/70 leading-relaxed mb-8">
+          This is usually a temporary backend/network issue rather than a missing page. Try reloading, or
+          check that the backend is running and reachable.
+        </p>
+        <Link href="/portfolio" className="text-sm text-sage-dark hover:underline">
+          &larr; Back to the portfolio
+        </Link>
+      </div>
+    );
+  }
+
+  const disease = state.disease;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-16">

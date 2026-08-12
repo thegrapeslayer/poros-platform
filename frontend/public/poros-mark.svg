@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-labelledby="title">
+<title>POROS mark</title>
+<g fill="none" stroke-linecap="round">
+  <!-- Two opposing arcs form a barrier with an open passage through its center. -->
+  <path d="M88 30 C50 34 28 60 28 96 C28 132 50 158 88 162"
+        stroke="#465C4C" stroke-width="18"/>
+  <path d="M104 30 C142 34 164 60 164 96 C164 132 142 158 104 162"
+        stroke="#465C4C" stroke-width="18"/>
+  <!-- Translation pathway -->
+  <path d="M96 40 L96 152" stroke="#AB8A52" stroke-width="8"/>
+  <circle cx="96" cy="40" r="5.5" fill="#AB8A52" stroke="none"/>
+  <circle cx="96" cy="152" r="5.5" fill="#AB8A52" stroke="none"/>
+</g>
+</svg>

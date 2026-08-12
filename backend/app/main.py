@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 from . import engine as eng
 
-app = FastAPI(title="RDTI API", version=eng.APP_VERSION)
+app = FastAPI(title="POROS API", version=eng.APP_VERSION)
 
 app.add_middleware(
     CORSMiddleware,
@@ -236,7 +236,11 @@ def compare_diseases(names: str = Query(..., description="Comma-separated diseas
             s["risk_band"] = risk_band(s["trs"])
             out.append(s)
         except Exception as e:
-            out.append({"name": name, "slug": slugify(name), "error": str(e)})
+            out.append({
+                "name": name, "slug": slugify(name), "trs": None, "domains": None,
+                "ascertainment_completeness": None, "evidence_coverage": None,
+                "risk_band": "UNSCORED", "error": str(e),
+            })
     return {"snapshot": snap, "diseases": out}
 
 
@@ -260,9 +264,9 @@ def methodology() -> dict[str, Any]:
         },
         "summary": (
             "Translation Risk Score (TRS) is derived from cohort-normalized evidence, not "
-            "hand-picked anchors. Type A (structured) evidence comes from ClinicalTrials.gov, "
+            "hand-picked anchors. Structured evidence comes from ClinicalTrials.gov, "
             "NIH RePORTER, and openFDA; each numeric feature is converted to an empirical "
-            "percentile risk against the current portfolio. Type B (documentary) evidence is "
+            "percentile risk against the current portfolio. Literature-derived evidence is "
             "retrieved from Europe PMC/PubMed and classified with paired, disease-proximate, "
             "exclusion-aware rules; presence of qualifying evidence lowers risk, "
             "non-confirmation raises it, and failure to retrieve evidence is reported as "

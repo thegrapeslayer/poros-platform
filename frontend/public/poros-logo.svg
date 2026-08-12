@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 250" role="img" aria-labelledby="title desc">
+<title id="title">POROS</title>
+<desc id="desc">POROS rare disease translation intelligence logo</desc>
+<g transform="translate(18,29) scale(1)">
+  <path d="M88 30 C50 34 28 60 28 96 C28 132 50 158 88 162"
+        fill="none" stroke="#465C4C" stroke-width="18" stroke-linecap="round"/>
+  <path d="M104 30 C142 34 164 60 164 96 C164 132 142 158 104 162"
+        fill="none" stroke="#465C4C" stroke-width="18" stroke-linecap="round"/>
+  <path d="M96 40 L96 152" fill="none" stroke="#AB8A52" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="96" cy="40" r="5.5" fill="#AB8A52"/>
+  <circle cx="96" cy="152" r="5.5" fill="#AB8A52"/>
+</g>
+<text x="235" y="132"
+      fill="#262D27"
+      font-family="Newsreader, Georgia, 'Times New Roman', serif"
+      font-size="104"
+      font-weight="600"
+      letter-spacing="5">POROS</text>
+<text x="242" y="177"
+      fill="#6F8A76"
+      font-family="'DM Sans', Arial, sans-serif"
+      font-size="21"
+      font-weight="600"
+      letter-spacing="5.4">RARE DISEASE TRANSLATION INTELLIGENCE</text>
+</svg>

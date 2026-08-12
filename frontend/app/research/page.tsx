@@ -19,7 +19,7 @@ export default function ResearchOverviewPage() {
   const [customCount, setCustomCount] = useState(20);
 
   useEffect(() => {
-    getPipelineConfig().then(setConfig).catch(() => setError("Couldn't reach the RDTI API."));
+    getPipelineConfig().then(setConfig).catch(() => setError("Couldn't reach the POROS API."));
   }, []);
 
   useEffect(() => {

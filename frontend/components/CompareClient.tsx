@@ -44,11 +44,14 @@ export default function CompareClient({ options }: { options: { name: string; sl
     }
   }
 
+  const scored = results.filter((r) => !r.error);
+  const failed = results.filter((r) => r.error);
+
   const chartData = DOMAIN_ORDER.map((d) => {
     const row: Record<string, number | string> = { domain: DOMAIN_LABELS[d] };
-    results.forEach((r) => {
+    scored.forEach((r) => {
       const risk = r.domains?.[d];
-      row[r.name] = risk == null ? 0 : Math.round((100 - risk) * 10) / 10; // readiness
+      if (risk != null) row[r.name] = Math.round((100 - risk) * 10) / 10; // readiness; omit if no data, never plot as 0
     });
     return row;
   });
@@ -87,34 +90,55 @@ export default function CompareClient({ options }: { options: { name: string; sl
                     <span className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
                     {r.name}
                   </p>
-                  <p className="text-xs text-muted mt-1">TRS {r.trs != null ? r.trs.toFixed(1) : "—"}</p>
+                  {r.error ? (
+                    <p className="text-xs text-rose mt-1">Couldn&rsquo;t score this disease</p>
+                  ) : (
+                    <p className="text-xs text-muted mt-1">TRS {r.trs != null ? r.trs.toFixed(1) : "—"}</p>
+                  )}
                 </div>
-                <RiskBadge band={r.risk_band} />
+                {r.error ? (
+                  <span className="text-xs text-muted eyebrow">no data</span>
+                ) : (
+                  <RiskBadge band={r.risk_band} />
+                )}
               </div>
             ))}
           </div>
           <div className="h-80 border hairline rounded-xl bg-card p-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={chartData}>
-                <PolarGrid stroke="#ddd2bd" />
-                <PolarAngleAxis dataKey="domain" tick={{ fontSize: 12, fill: "#6d7268" }} />
-                <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#6d7268" }} />
-                {results.map((r, i) => (
-                  <Radar
-                    key={r.slug}
-                    name={r.name}
-                    dataKey={r.name}
-                    stroke={COLORS[i % COLORS.length]}
-                    fill={COLORS[i % COLORS.length]}
-                    fillOpacity={0.15}
-                  />
-                ))}
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Tooltip />
-              </RadarChart>
-            </ResponsiveContainer>
+            {scored.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={chartData}>
+                  <PolarGrid stroke="#ddd2bd" />
+                  <PolarAngleAxis dataKey="domain" tick={{ fontSize: 12, fill: "#6d7268" }} />
+                  <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#6d7268" }} />
+                  {scored.map((r, i) => (
+                    <Radar
+                      key={r.slug}
+                      name={r.name}
+                      dataKey={r.name}
+                      stroke={COLORS[i % COLORS.length]}
+                      fill={COLORS[i % COLORS.length]}
+                      fillOpacity={0.15}
+                      connectNulls={false}
+                    />
+                  ))}
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Tooltip />
+                </RadarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-sm text-muted text-center px-6">
+                None of the selected diseases could be scored yet.
+              </div>
+            )}
           </div>
         </div>
+      )}
+      {failed.length > 0 && (
+        <p className="mt-4 text-xs text-muted">
+          {failed.length} of {results.length} selected diseases couldn&rsquo;t be resolved or scored and
+          {failed.length === 1 ? " is" : " are"} excluded from the chart above.
+        </p>
       )}
     </div>
   );

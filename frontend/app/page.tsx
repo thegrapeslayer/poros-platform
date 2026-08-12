@@ -27,7 +27,7 @@ export default async function HomePage() {
           biological discovery and patient access.
         </h1>
         <p className="mt-6 max-w-2xl text-ink/70 leading-relaxed">
-          RDTI scores each disease&rsquo;s translation pathway from structured trial,
+          POROS scores each disease&rsquo;s translation pathway from structured trial,
           funding, and regulatory records alongside documentary evidence in the
           literature &mdash; then traces every score back to its source.
         </p>
@@ -39,7 +39,7 @@ export default async function HomePage() {
       {apiError && (
         <section className="max-w-6xl mx-auto px-6 pb-10">
           <div className="border hairline rounded-xl bg-gold-soft/60 p-4 text-sm text-ink/80">
-            Couldn&rsquo;t reach the RDTI API at build/render time. Start the backend
+            Couldn&rsquo;t reach the POROS API at build/render time. Start the backend
             (see <code className="font-mono">backend/README</code>) and set{" "}
             <code className="font-mono">NEXT_PUBLIC_API_URL</code>, or run{" "}
             <code className="font-mono">POST /api/admin/refresh</code> to populate the portfolio.
