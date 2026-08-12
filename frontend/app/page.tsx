@@ -41,8 +41,7 @@ export default async function HomePage() {
           <div className="border hairline rounded-xl bg-gold-soft/60 p-4 text-sm text-ink/80">
             Couldn&rsquo;t reach the POROS API at build/render time. Start the backend
             (see <code className="font-mono">backend/README</code>) and set{" "}
-            <code className="font-mono">NEXT_PUBLIC_API_URL</code>, or run{" "}
-            <code className="font-mono">POST /api/admin/refresh</code> to populate the portfolio.
+            <code className="font-mono">NEXT_PUBLIC_API_URL</code>.
           </div>
         </section>
       )}
@@ -95,9 +94,10 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 function EmptyState() {
   return (
     <div className="border hairline rounded-xl p-10 text-center text-muted bg-card">
-      No scored diseases yet. Run{" "}
-      <code className="font-mono">POST /api/admin/refresh</code> against the backend to fetch
-      evidence for the portfolio.
+      No scored diseases yet.{" "}
+      <Link href="/portfolio" className="text-sage-dark hover:underline">
+        Go to the portfolio to fetch evidence &rarr;
+      </Link>
     </div>
   );
 }

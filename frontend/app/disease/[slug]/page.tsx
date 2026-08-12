@@ -49,12 +49,13 @@ export default async function DiseaseDetailPage({ params }: { params: { slug: st
           This disease is in the POROS portfolio but doesn&rsquo;t have a scored snapshot yet.
         </h1>
         <p className="text-ink/70 leading-relaxed mb-8">
-          Its evidence hasn&rsquo;t been retrieved and scored yet. Run{" "}
-          <code className="font-mono text-sm">POST /api/admin/refresh</code> against the backend to fetch
-          current evidence for the portfolio, then reload this page.
+          Its evidence hasn&rsquo;t been retrieved and scored yet.
         </p>
-        <Link href="/portfolio" className="text-sm text-sage-dark hover:underline">
-          &larr; Back to the portfolio
+        <Link
+          href="/portfolio"
+          className="inline-block rounded-full bg-sage-dark text-white px-5 py-2.5 text-sm font-medium hover:bg-sage transition-colors"
+        >
+          Go to the portfolio to refresh scores &rarr;
         </Link>
       </div>
     );

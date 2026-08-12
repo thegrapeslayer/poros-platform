@@ -1,5 +1,6 @@
 import { listDiseases } from "@/lib/api";
 import DiseaseCard from "@/components/DiseaseCard";
+import PortfolioRefresh from "@/components/PortfolioRefresh";
 
 export const metadata = { title: "Portfolio — POROS" };
 
@@ -33,6 +34,8 @@ export default async function PortfolioPage() {
         </div>
       )}
 
+      {!apiError && <PortfolioRefresh unscoredCount={diseases.length - scored.length} />}
+
       {sorted.length ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {sorted.map((d) => (
@@ -41,8 +44,7 @@ export default async function PortfolioPage() {
         </div>
       ) : !apiError ? (
         <div className="border hairline rounded-xl p-10 text-center text-muted bg-card">
-          No diseases in the portfolio yet. Run{" "}
-          <code className="font-mono">POST /api/admin/refresh</code> against the backend.
+          No diseases in the portfolio yet. Click &ldquo;Refresh portfolio now&rdquo; above to fetch evidence.
         </div>
       ) : null}
     </div>

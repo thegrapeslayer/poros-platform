@@ -74,6 +74,32 @@ export function getPortfolio() {
 }
 
 // ---------------------------------------------------------------------------
+// Admin: populate/update the public portfolio's live scores. Needs the
+// backend to have outbound internet access to ClinicalTrials.gov, Europe
+// PMC, NIH RePORTER, and openFDA. No auth on this endpoint today — see
+// docs/CURRENT_STATUS.md.
+// ---------------------------------------------------------------------------
+
+export interface AdminRefreshStatus {
+  running: boolean;
+  done: number;
+  total: number;
+  errors: { disease: string; error: string }[];
+}
+
+export function startAdminRefresh(diseases?: string[]) {
+  return getJSON<{ started: boolean; count: number }>("/api/admin/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ diseases }),
+  });
+}
+
+export function getAdminRefreshStatus() {
+  return getJSON<AdminRefreshStatus>("/api/admin/refresh/status");
+}
+
+// ---------------------------------------------------------------------------
 // Research namespace — wraps the manuscript pipeline (historical cohort
 // scoring, outcome derivation, predictive analyses, Type B validation/QA,
 // counterfactuals, export). Operator-facing, no auth — see README before
