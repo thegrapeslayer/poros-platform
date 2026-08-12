@@ -63,8 +63,8 @@ export default async function HomePage() {
             <p className="eyebrow text-muted mb-2">Translation landscape</p>
             <h2 className="font-display text-2xl text-ink">Highest translation risk right now</h2>
           </div>
-          <Link href="/portfolio" className="text-sm text-sage-dark hover:underline">
-            View full portfolio &rarr;
+          <Link href="/diseases" className="text-sm text-sage-dark hover:underline">
+            View all diseases &rarr;
           </Link>
         </div>
         {highRisk.length ? (
@@ -95,8 +95,8 @@ function EmptyState() {
   return (
     <div className="border hairline rounded-xl p-10 text-center text-muted bg-card">
       No scored diseases yet.{" "}
-      <Link href="/portfolio" className="text-sage-dark hover:underline">
-        Go to the portfolio to fetch evidence &rarr;
+      <Link href="/diseases" className="text-sage-dark hover:underline">
+        Go to the diseases page to fetch evidence &rarr;
       </Link>
     </div>
   );

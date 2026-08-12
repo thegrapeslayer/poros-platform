@@ -3,7 +3,6 @@ import PorosLogo from "./PorosLogo";
 
 const LINKS = [
   { href: "/diseases", label: "Diseases" },
-  { href: "/portfolio", label: "Portfolio" },
   { href: "/compare", label: "Compare" },
   { href: "/methodology", label: "Methodology" },
   { href: "/pipeline", label: "Manuscript Pipeline" },

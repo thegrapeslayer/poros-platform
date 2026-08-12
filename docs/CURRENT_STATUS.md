@@ -1,9 +1,12 @@
 # Current Status
 
-Last updated: 2026-08-11, by a Claude Code pass that first audited/documented the repo,
-then fixed the comparison bug, disease/portfolio empty-state confusion, the RDTI→POROS
-rebrand, "Type A"/"Type B" jargon, and added a manuscript pipeline explainer page — see
-[CHANGELOG.md](CHANGELOG.md) for the full list of what changed in that second pass.
+Last updated: 2026-08-12, by a Claude Code pass that merged `/diseases` and `/portfolio`
+into one page, added per-disease scoring (not just whole-portfolio refresh), and made
+domain risk use the same 0–100 scale/direction as TRS everywhere instead of an inverted
+"readiness" concept. Builds on an earlier pass that audited/documented the repo, fixed the
+comparison bug, disease/portfolio empty-state confusion, the RDTI→POROS rebrand, "Type
+A"/"Type B" jargon, and added a manuscript pipeline explainer page — see
+[CHANGELOG.md](CHANGELOG.md) for the full list of what changed in both passes.
 
 **Update this file after any meaningful change** — see
 [CLAUDE.md](../CLAUDE.md#keeping-this-documentation-current). Stale status docs are worse
@@ -46,7 +49,7 @@ than no status docs.
   present, correct 404 without it). This was **not fixed by populating data** — the
   underlying empty-`backend/app/data/` cause described below is unchanged and still needs a
   real `/api/admin/refresh` run (or `seed_demo.py`) to have content to show; see
-  [ARCHITECTURE.md](ARCHITECTURE.md#known-bug-apicompare-error-path-breaks-the-comparison-ui).
+  [ARCHITECTURE.md](ARCHITECTURE.md#resolved-apicompare-error-path-was-breaking-the-comparison-ui).
 - **RDTI → POROS rebrand** — done across `layout.tsx` metadata/favicon, `Nav.tsx`
   (now a `PorosLogo` SVG component from `poros_brand_assets.zip`, matching the existing
   Tailwind palette exactly), `Footer.tsx`, all page `<title>`s, `package.json`/
@@ -69,6 +72,21 @@ than no status docs.
   outputs), each with what/input/method/output/downstream-use, linking to the relevant
   `/research/*` operator tool. Addresses the previously-missing public pipeline
   explainer noted below.
+- **Diseases and Portfolio merged into one page** — `/diseases` now has the search/filter
+  table plus the refresh-all widget that used to live only on `/portfolio`; `/portfolio`
+  redirects there. See [ARCHITECTURE.md](ARCHITECTURE.md#diseasesportfolio-merge).
+- **A single disease can now be scored on its own**, not just the full ~100-disease
+  portfolio: `ScoreDiseaseButton.tsx` appears per unscored row in the diseases table and
+  on a disease's own "not yet scored" page, both calling the same
+  `POST /api/admin/refresh` with a one-item `diseases` list. Verified in a browser: click
+  triggers a real `POST /api/admin/refresh`, the button shows "Scoring…" and disables,
+  other rows' buttons stay independently clickable.
+- **Domain risk uses the same 0–100 scale and direction as TRS everywhere** — previously
+  `DomainBars`/`CompareClient` each inverted risk to an undocumented "readiness" concept
+  with two different scales (0–10 vs 0–100), confusing next to the TRS headline. Both now
+  show risk directly with an explicit caption; verified in a browser on both the disease
+  page and the compare radar chart. See
+  [ARCHITECTURE.md](ARCHITECTURE.md#resolved-domain-risk-now-uses-the-same-scaledirection-as-trs-everywhere).
 
 ## Implemented but incomplete / broken
 

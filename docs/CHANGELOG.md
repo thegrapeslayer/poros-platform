@@ -15,6 +15,44 @@ Format: newest first. `[Type]` one of `Docs`, `Fix`, `Feature`, `Rebrand`, `Data
 
 ---
 
+## 2026-08-12 — [Feature] Merge diseases/portfolio, per-disease scoring, risk-scale clarity
+
+Three product changes requested after using the site: two redundant pages doing the same
+job, no way to score just one disease without running the full ~100-disease refresh, and
+domain risk numbers reading as confusing next to TRS.
+
+- **`[Feature]` Merged `/diseases` and `/portfolio`**: one page (`/diseases`) now has the
+  search/band-filter table plus the refresh-all widget. `/portfolio/page.tsx` is now a
+  `redirect("/diseases")`. `Nav.tsx` dropped the duplicate "Portfolio" link. Every internal
+  `/portfolio` link (`page.tsx`, `pipeline/page.tsx`, `disease/[slug]/page.tsx`) updated to
+  point at `/diseases`.
+- **`[Feature]` Score one disease at a time**: new `ScoreDiseaseButton.tsx` calls the
+  existing `POST /api/admin/refresh` with a one-item `diseases` list (the backend already
+  supported this; nothing new needed there) and polls `/api/admin/refresh/status` until
+  done, then `router.refresh()`s the page. Wired into `DiseaseTable.tsx` (per unscored row)
+  and `disease/[slug]/page.tsx`'s "not yet scored" state (canonical disease name parsed
+  from the backend's `"No snapshot for '{name}' yet"` error text, no extra fetch needed).
+  Guards against the backend's single shared refresh job slot by checking `running` before
+  starting and showing "a refresh is already in progress" instead of a silent failure.
+- **`[Feature]` Domain risk now matches TRS's scale and direction**: `DomainBars.tsx` and
+  `CompareClient.tsx` used to invert risk into an undocumented "readiness" concept with two
+  *different* scales (0–10 vs 0–100) — confusing directly next to the 0–100 TRS headline.
+  Both now display risk directly, 0–100, same direction as TRS, with an explicit caption
+  on each ("higher = more risk"), and `DomainBars`' bar coloring reuses the same
+  HIGH/MODERATE/LOW thresholds as `RiskBadge`. Removes a documented duplication
+  (two independently-computed, differently-scaled readiness formulas) noted in
+  `ARCHITECTURE.md` from the previous pass.
+
+All three verified end-to-end in a browser against a local backend/frontend: merged page
+renders 100 diseases with correct scored/unscored counts, `/portfolio` redirects,
+clicking "Score now" on an unscored row fires a real `POST /api/admin/refresh` and shows
+"Scoring…" while other rows stay independently clickable, and both the disease-detail page
+and the compare radar chart show domain risk on the same 0–100 scale as TRS with the new
+captions.
+
+See `docs/ARCHITECTURE.md` ("Diseases/portfolio merge", "Resolved: domain risk now uses
+the same scale/direction as TRS everywhere") and `docs/CURRENT_STATUS.md` for detail.
+
 ## 2026-08-11 — [Fix] Rebrand, comparison bug, empty-state clarity, plain-language scoring UI
 
 Product fixes following the documentation pass above, verified end-to-end in a browser

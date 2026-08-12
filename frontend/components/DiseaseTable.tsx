@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import RiskBadge from "./RiskBadge";
+import ScoreDiseaseButton from "./ScoreDiseaseButton";
 import type { DiseaseSummary, RiskBand } from "@/lib/api";
 
 const BANDS: (RiskBand | "ALL")[] = ["ALL", "HIGH", "MODERATE", "LOW", "UNSCORED"];
@@ -63,7 +64,11 @@ export default function DiseaseTable({ diseases }: { diseases: DiseaseSummary[] 
                   <RiskBadge band={d.risk_band} />
                 </td>
                 <td className="px-5 py-3 text-right font-mono">
-                  {d.trs != null ? d.trs.toFixed(1) : "—"}
+                  {d.trs != null ? (
+                    d.trs.toFixed(1)
+                  ) : (
+                    <ScoreDiseaseButton name={d.name} className="inline-flex justify-end" />
+                  )}
                 </td>
               </tr>
             ))}

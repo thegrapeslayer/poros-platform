@@ -19,15 +19,19 @@ poros-platform/
 └── frontend/                Next.js 14 App Router site
     ├── app/
     │   ├── page.tsx                    /            — homepage, hero + high-risk preview
-    │   ├── diseases/page.tsx           /diseases    — full searchable/filterable table
-    │   ├── portfolio/page.tsx          /portfolio   — full card grid, ranked by TRS
+    │   ├── diseases/page.tsx           /diseases    — the disease list: search/filter table,
+    │   │                                              refresh-all + per-disease "Score now",
+    │   │                                              ranked by TRS. Single merged page — see
+    │   │                                              "Diseases/portfolio merge" below.
+    │   ├── portfolio/page.tsx          /portfolio   — redirects to /diseases (old links)
     │   ├── disease/[slug]/page.tsx     /disease/:slug — one disease's full profile
     │   ├── compare/page.tsx            /compare     — up to 4 diseases, radar chart
-    │   ├── methodology/page.tsx        /methodology — domains/features + (to add) pipeline explainer
+    │   ├── methodology/page.tsx        /methodology — domains/features, plain-language evidence types
+    │   ├── pipeline/page.tsx           /pipeline    — manuscript pipeline explainer (public-facing)
     │   └── research/                   /research/*  — operator tools, see "Research namespace" below
     ├── components/               shared UI: Nav, Footer, DiseaseCard/Table, SearchBar,
     │                              DomainBars, RiskBadge, EvidenceSection, CompareClient,
-    │                              ResearchNav
+    │                              ScoreDiseaseButton, PortfolioRefresh, ResearchNav
     └── lib/api.ts                 the only place that knows backend URLs/response shapes
 ```
 
@@ -45,17 +49,25 @@ case both `main.py`'s route and `lib/api.ts`'s matching type/function change tog
 - `GET /api/health`
 - `GET /api/portfolio` — the fixed list of disease names (`main.PORTFOLIO`)
 - `GET /api/diseases` — every portfolio disease with current TRS/risk band (powers
-  homepage, `/diseases`, `/portfolio`, `SearchBar`)
+  homepage, `/diseases`, `SearchBar`)
 - `GET /api/disease/{slug}` — full profile: TRS, domain breakdown, primary barriers,
-  provenance. 404s if the slug isn't in the portfolio, or if no snapshot exists yet for
-  it (see [CURRENT_STATUS.md](CURRENT_STATUS.md) for why this is the actual cause of the
-  "disease page not found" issue in a fresh checkout)
+  provenance. 404s if the slug isn't in the portfolio; returns a distinguishable
+  "no snapshot yet" error if it's in the portfolio but unscored (the frontend tells these
+  two cases apart — see "Diseases/portfolio merge" below)
 - `GET /api/compare?names=...` — same shape as `/api/diseases` but for a comma-separated
-  subset; **known bug in its error path**, see below
+  subset. Its error-path shape now matches the success shape (`trs`/`domains`/`risk_band`
+  all present, `null`/`"UNSCORED"` on failure) so `CompareClient.tsx` can render a real
+  "couldn't score this disease" state instead of silently plotting zeros.
 - `GET /api/methodology` — domain labels + full feature dictionary, live from
   `FEATURE_SPECS`
-- `POST /api/admin/refresh` / `GET /api/admin/refresh/status` — triggers live retrieval
-  for the portfolio (or a subset), runs as a background task, needs outbound internet
+- `POST /api/admin/refresh` / `GET /api/admin/refresh/status` — triggers live retrieval.
+  Accepts an optional `diseases` list in the POST body — `lib/api.ts`'s
+  `startAdminRefresh(diseases?)` uses this to score **one** disease at a time
+  (`ScoreDiseaseButton.tsx`) as well as the whole portfolio (`PortfolioRefresh.tsx`).
+  There is exactly one background job slot on the backend (`_refresh_status` is a single
+  module-level dict, not per-disease), so a single-disease refresh and a full-portfolio
+  refresh can't run concurrently — the frontend checks `running` before starting and
+  shows "a refresh is already in progress" rather than letting the request 409 silently.
 
 **Research namespace** (`/api/research/*`) — wraps the manuscript pipeline
 (historical-cohort scoring, outcome derivation, predictive/univariate stats, Type B
@@ -79,37 +91,45 @@ and every fetch function. **Any backend response shape change must be mirrored h
 the same change** — this is the one place a frontend/backend contract mismatch can
 silently break rendering, and it already has one live example (next section).
 
-## Known bug: `/api/compare` error path breaks the comparison UI
+## Resolved: `/api/compare` error path (was breaking the comparison UI)
 
-`compare_diseases()` (`main.py:219-240`) has two return shapes depending on whether a
-requested disease resolved successfully:
+`compare_diseases()` (`main.py:219-240`) used to return a different, smaller shape for a
+disease that failed to resolve/score than for one that succeeded — missing `trs`,
+`domains`, and `risk_band` entirely — which `CompareClient.tsx` didn't guard against, so
+a failed comparison silently rendered as an empty risk badge and a false "0/100 on every
+domain" radar plot. Fixed on both sides: the error-path payload now includes
+`trs: null, domains: null, risk_band: "UNSCORED"` (matching `list_diseases()`'s existing
+fallback shape), and `CompareClient.tsx` explicitly splits `results` into `scored`/`failed`
+and renders a visible "couldn't be scored" note instead of feeding nulls into the chart.
 
-- Success: `disease_summary()`'s full shape — `{name, slug, disease_id, trs, domains,
-  ascertainment_completeness, evidence_coverage, risk_band}`.
-- Failure (`main.py:238-239`): only `{name, slug, error}` — **missing `trs`, `domains`,
-  and `risk_band` entirely**, unlike the equivalent fallback in `list_diseases()`
-  (`main.py:173`), which does include `trs: None, risk_band: "UNSCORED"`.
+## Resolved: domain risk now uses the same scale/direction as TRS everywhere
 
-`frontend/lib/api.ts`'s `DiseaseSummary` interface declares `trs` and `risk_band` as
-required (only `error` is optional), and `CompareClient.tsx` never checks `r.error`
-anywhere. The result: a failed comparison entry renders `RiskBadge` with `band=undefined`
-(empty, uncolored pill) and gets plotted on the radar chart as `0` on every domain axis —
-indistinguishable from a real "maximum risk" score, not from "couldn't score this
-disease." This is the disease comparison feature's specific breakage and is fixed as
-part of the Phase 2 work — see [CURRENT_STATUS.md](CURRENT_STATUS.md).
+Domain values from the API are always **risk** (0 = best, 100 = worst) — same direction
+as TRS. `DomainBars.tsx` and `CompareClient.tsx` used to each independently invert this to
+a "readiness" concept for display, with two different, undocumented scales (0–10 on the
+disease page, 0–100 on the compare radar), which read as confusing/contradictory next to
+the TRS headline directly above them. Both components now display **risk directly, 0–100,
+same direction as TRS**, each with an explicit caption saying so
+(`DomainBars.tsx`'s `riskColor()` bucket coloring reuses the same HIGH/MODERATE/LOW
+thresholds as `RiskBadge`/`risk_band()`). There is no more inversion or duplicated
+readiness-conversion math anywhere in the frontend.
 
-## Readiness vs. risk: a known duplication
+## Diseases/portfolio merge
 
-The backend only ever produces **risk** (0 = best, 100 = worst). Two frontend components
-independently invert it to "readiness" for more intuitive display, with **different
-scales**:
-- `DomainBars.tsx:18` — `(100 - risk) / 10`, a 0–10 scale, used on the disease detail page.
-- `CompareClient.tsx:51` — `(100 - risk)`, a 0–100 scale, used for the compare radar chart.
+`/diseases` and `/portfolio` used to be two separate pages rendering the same
+`GET /api/diseases` data in different layouts (a filterable table vs. a card grid) — a
+maintenance duplication with no functional difference. Merged into one page at
+`/diseases`: the search/band-filter table (`DiseaseTable.tsx`) plus the refresh-all widget
+(`PortfolioRefresh.tsx`) that used to live only on `/portfolio`. `/portfolio/page.tsx` is
+now a one-line `redirect("/diseases")` so old links/bookmarks still resolve. `Nav.tsx` has
+a single "Diseases" entry.
 
-Each is internally consistent with its own chart's axis, so this isn't a display bug, but
-it is duplicated conversion logic with no single source of truth — a future change to the
-readiness formula (e.g. rounding behavior) requires remembering to update it in two
-places. Worth centralizing in `lib/api.ts` or a shared util if touched again.
+Each unscored row in that table also gets its own `ScoreDiseaseButton` (`name={d.name}`,
+`variant="default"`) so a single disease can be scored without running the full
+~100-disease refresh — the same button (in `variant="primary"` form) also appears on a
+disease's own page when it hits the "not yet scored" state, with the canonical disease
+name parsed out of the backend's `"No snapshot for '{name}' yet"` error text via
+`loadDisease()` in `disease/[slug]/page.tsx`, avoiding an extra round trip.
 
 ## Routing / slug contract
 

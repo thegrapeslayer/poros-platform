@@ -1,5 +1,6 @@
 node_modules/
 .next/
+*.tsbuildinfo
 backend/app/data/
 __pycache__/
 *.pyc

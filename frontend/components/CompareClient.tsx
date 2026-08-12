@@ -47,11 +47,14 @@ export default function CompareClient({ options }: { options: { name: string; sl
   const scored = results.filter((r) => !r.error);
   const failed = results.filter((r) => r.error);
 
+  // Plotted directly as risk, 0-100, same scale/direction as TRS and DomainBars —
+  // deliberately not inverted to a "readiness" scale. Further out on this chart means
+  // more translation risk in that domain, not less.
   const chartData = DOMAIN_ORDER.map((d) => {
     const row: Record<string, number | string> = { domain: DOMAIN_LABELS[d] };
     scored.forEach((r) => {
       const risk = r.domains?.[d];
-      if (risk != null) row[r.name] = Math.round((100 - risk) * 10) / 10; // readiness; omit if no data, never plot as 0
+      if (risk != null) row[r.name] = risk; // omit if no data, never plot as 0
     });
     return row;
   });
@@ -133,6 +136,12 @@ export default function CompareClient({ options }: { options: { name: string; sl
             )}
           </div>
         </div>
+      )}
+      {scored.length > 0 && (
+        <p className="mt-3 text-[11px] text-muted">
+          Domain risk, 0&ndash;100 &mdash; same scale as TRS. Further from center = more translation risk in
+          that domain, not less.
+        </p>
       )}
       {failed.length > 0 && (
         <p className="mt-4 text-xs text-muted">

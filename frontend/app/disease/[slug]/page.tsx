@@ -4,11 +4,12 @@ import { getDisease } from "@/lib/api";
 import RiskBadge from "@/components/RiskBadge";
 import DomainBars from "@/components/DomainBars";
 import EvidenceSection from "@/components/EvidenceSection";
+import ScoreDiseaseButton from "@/components/ScoreDiseaseButton";
 
 type FetchState =
   | { kind: "ok"; disease: Awaited<ReturnType<typeof getDisease>> }
   | { kind: "not-in-portfolio" }
-  | { kind: "not-scored" }
+  | { kind: "not-scored"; name: string }
   | { kind: "error" };
 
 async function loadDisease(slug: string): Promise<FetchState> {
@@ -26,7 +27,11 @@ async function loadDisease(slug: string): Promise<FetchState> {
       return { kind: "not-in-portfolio" };
     }
     if (message.includes("No snapshot")) {
-      return { kind: "not-scored" };
+      // main.py's 404 body is "No snapshot for '{name}' yet. ..." — pull the canonical
+      // name back out so we can offer to score exactly this disease, not the whole
+      // portfolio, without an extra round trip.
+      const match = message.match(/No snapshot for '(.+?)' yet/);
+      return { kind: "not-scored", name: match?.[1] ?? slug };
     }
     return { kind: "error" };
   }
@@ -46,17 +51,18 @@ export default async function DiseaseDetailPage({ params }: { params: { slug: st
       <div className="max-w-2xl mx-auto px-6 py-24 text-center">
         <p className="eyebrow text-muted mb-3">Not yet scored</p>
         <h1 className="font-display text-2xl text-ink mb-4">
-          This disease is in the POROS portfolio but doesn&rsquo;t have a scored snapshot yet.
+          {state.name} is in the POROS portfolio but doesn&rsquo;t have a scored snapshot yet.
         </h1>
         <p className="text-ink/70 leading-relaxed mb-8">
-          Its evidence hasn&rsquo;t been retrieved and scored yet.
+          Its evidence hasn&rsquo;t been retrieved and scored yet. Score just this disease below, or refresh
+          the whole portfolio from the diseases page.
         </p>
-        <Link
-          href="/portfolio"
-          className="inline-block rounded-full bg-sage-dark text-white px-5 py-2.5 text-sm font-medium hover:bg-sage transition-colors"
-        >
-          Go to the portfolio to refresh scores &rarr;
-        </Link>
+        <div className="flex flex-col items-center gap-4">
+          <ScoreDiseaseButton name={state.name} label={`Score ${state.name} now`} variant="primary" />
+          <Link href="/diseases" className="text-sm text-sage-dark hover:underline">
+            &larr; Back to all diseases
+          </Link>
+        </div>
       </div>
     );
   }
@@ -70,8 +76,8 @@ export default async function DiseaseDetailPage({ params }: { params: { slug: st
           This is usually a temporary backend/network issue rather than a missing page. Try reloading, or
           check that the backend is running and reachable.
         </p>
-        <Link href="/portfolio" className="text-sm text-sage-dark hover:underline">
-          &larr; Back to the portfolio
+        <Link href="/diseases" className="text-sm text-sage-dark hover:underline">
+          &larr; Back to all diseases
         </Link>
       </div>
     );
@@ -96,6 +102,9 @@ export default async function DiseaseDetailPage({ params }: { params: { slug: st
             <span className="text-lg text-muted"> / 100</span>
           </p>
           <p className="text-xs text-muted mt-2">
+            0 = lowest risk (closest to patient access) · 100 = highest risk (furthest from patient access)
+          </p>
+          <p className="text-xs text-muted mt-1">
             Ascertainment {disease.ascertainment_completeness ?? "—"}% · Evidence coverage{" "}
             {disease.evidence_coverage ?? "—"}%
           </p>

@@ -24,7 +24,7 @@ function stages(cohortSize: string, baseline: string, followup: string): Stage[]
       method: `${cohortSize} named rare diseases, hand-selected to span disease categories and translation stages — not sampled or filtered by outcome. Frozen before large-scale data collection, per the project's own scoring protocol.`,
       output: "A resolved disease_id per name, persisted in the diseases table.",
       downstream: "Every reference-cohort percentile, domain score, and TRS in this manuscript is relative to this exact cohort — changing membership changes every disease's score, not just the one added or removed.",
-      links: [{ href: "/portfolio", label: "View the current portfolio" }],
+      links: [{ href: "/diseases", label: "View the current portfolio" }],
     },
     {
       n: 2,
