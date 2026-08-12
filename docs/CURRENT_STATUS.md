@@ -93,14 +93,17 @@ than no status docs.
   show risk directly with an explicit caption; verified in a browser on both the disease
   page and the compare radar chart. See
   [ARCHITECTURE.md](ARCHITECTURE.md#resolved-domain-risk-now-uses-the-same-scaledirection-as-trs-everywhere).
-- **Real 100-disease data refresh run**: unlike the sandboxed environment the first two
-  passes ran in, this machine has real outbound internet, so `POST /api/admin/refresh`
-  was run against the full `PORTFOLIO` for real — live ClinicalTrials.gov/Europe
-  PMC/NIH RePORTER/openFDA evidence, not `seed_demo.py` placeholders. See
-  [DATA_SOURCES.md](DATA_SOURCES.md) for exact coverage as of this pass — check
-  `GET /api/provenance` (or the Methodology page's Data Provenance section, next bullet)
-  for the current live count, since a refresh can be re-run any time and this file isn't
-  re-diffed against the database on every edit.
+- **Real 100-disease data refresh completed — 100/100 scored, 0 errors**: unlike the
+  sandboxed environment the first two passes ran in, this machine has real outbound
+  internet, so `POST /api/admin/refresh` was run against the full `PORTFOLIO` for real —
+  live ClinicalTrials.gov/Europe PMC/NIH RePORTER/openFDA evidence, not `seed_demo.py`
+  placeholders. Verified via `GET /api/diseases`: 31 HIGH / 60 MODERATE / 9 LOW, 0
+  UNSCORED. This coverage lives in this machine's local SQLite file only — see the
+  persistence-risk note in [DATA_SOURCES.md](DATA_SOURCES.md) for why it doesn't
+  automatically carry over to a Render deployment. Check `GET /api/provenance` (or the
+  Methodology page's Data Provenance section, next bullet) for the current live count
+  going forward, since a refresh can be re-run any time and this file isn't re-diffed
+  against the database on every edit.
 - **New `GET /api/provenance` endpoint + Data Provenance section on `/methodology`**:
   surfaces cohort size, diseases actually scored, live `model_version`/`extractor_version`,
   and the most recent evidence retrieval timestamp, computed live from the database (not
