@@ -86,9 +86,11 @@ this pipeline is a implementation of," not as a 1:1 spec of the current code. Va
 in the docx with no corresponding `FEATURE_SPECS` entry (e.g. "sponsor concentration
 (HHI)" and "program discontinuation burden" under Economic; "dominant mechanistic
 convergence" and "therapeutic modality precedent" under Biological; "approved therapy for
-same disease" under Regulatory — full domain-by-domain gap list available on request from
-the repo's audit history) are **not implemented and not scored** — do not assume they
-exist just because the docx describes them.
+same disease" under Regulatory) are **not implemented and not scored** — do not assume
+they exist just because the docx describes them. The full domain-by-domain list, with a
+draft Implemented/Not-implemented disposition per variable, is in
+[VARIABLE_DISPOSITION.md](VARIABLE_DISPOSITION.md) — **that table is a first-pass draft
+needing the project owner's review**, not a finished manuscript decision.
 
 **"Type A" / "Type B" is implementation vocabulary, not manuscript vocabulary.** A full
 text search of all six Objective Scoring docx files found zero occurrences of "Type A" or

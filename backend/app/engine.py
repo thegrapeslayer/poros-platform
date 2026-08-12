@@ -1663,18 +1663,31 @@ def manuscript_dataset(cohort_id: str, snap: str, index_date: str, followup_end:
 
 
 def provenance_table(disease_id: str, snap: str) -> pd.DataFrame:
+    """Reporting-only — never used by scoring. Type B rows are LEFT JOINed against
+    `documents` so the UI can show the actual PubMed/PMC link and title a classification
+    decision was based on, not just the opaque internal document_id. Also carries
+    extractor_version per Type B row, since a feature dictionary/rule change can leave
+    old and new evidence side by side for the same disease until a wipe+rebuild."""
     with db_conn() as conn:
         obs = pd.read_sql_query(
             """SELECT feature_id AS Variable, raw_value_json AS Value, source AS Source, source_url AS URL,
-                      source_date AS SourceDate, retrieved_at AS Retrieved, query_used AS Query, 'A' AS Type
+                      source_date AS SourceDate, retrieved_at AS Retrieved, query_used AS Query, 'A' AS Type,
+                      '' AS DocTitle, NULL AS ExtractorVersion
                FROM raw_observations WHERE disease_id=? AND snapshot_date=?""",
             conn, params=(disease_id, snap),
         )
         ev = pd.read_sql_query(
-            """SELECT feature_id AS Variable, status AS Value, COALESCE(document_id,'') AS Source,
-                      '' AS URL, '' AS SourceDate, retrieved_at AS Retrieved,
-                      supporting_snippet AS Query, 'B' AS Type
-               FROM feature_evidence WHERE disease_id=? AND snapshot_date=?""",
+            """SELECT e.feature_id AS Variable, e.status AS Value,
+                      CASE WHEN d.pmid != '' THEN 'PubMed PMID:' || d.pmid
+                           WHEN d.pmcid != '' THEN 'PMC:' || d.pmcid
+                           ELSE COALESCE(e.document_id, '') END AS Source,
+                      COALESCE(d.url, '') AS URL, COALESCE(d.publication_date, '') AS SourceDate,
+                      e.retrieved_at AS Retrieved, e.supporting_snippet AS Query, 'B' AS Type,
+                      COALESCE(d.title, '') AS DocTitle, e.extractor_version AS ExtractorVersion
+               FROM feature_evidence e
+               LEFT JOIN documents d ON d.document_id = e.document_id AND d.disease_id = e.disease_id
+                                        AND d.snapshot_date = e.snapshot_date
+               WHERE e.disease_id=? AND e.snapshot_date=?""",
             conn, params=(disease_id, snap),
         )
     return pd.concat([obs, ev], ignore_index=True)

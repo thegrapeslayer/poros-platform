@@ -1,6 +1,7 @@
 import { listDiseases } from "@/lib/api";
 import DiseaseTable from "@/components/DiseaseTable";
 import PortfolioRefresh from "@/components/PortfolioRefresh";
+import CohortBadge from "@/components/CohortBadge";
 
 export const metadata = { title: "Diseases — POROS" };
 
@@ -18,13 +19,17 @@ export default async function DiseasesPage() {
   return (
     <div className="max-w-6xl mx-auto px-6 py-16">
       <p className="eyebrow text-muted mb-2">Portfolio</p>
-      <h1 className="font-display text-3xl text-ink mb-2">
-        {diseases.length} disease{diseases.length === 1 ? "" : "s"}
-      </h1>
+      <div className="flex flex-wrap items-center gap-3 mb-2">
+        <h1 className="font-display text-3xl text-ink">
+          {diseases.length} disease{diseases.length === 1 ? "" : "s"}
+        </h1>
+        <CohortBadge status="validated" />
+      </div>
       <p className="text-sm text-muted mb-8">
         {scored.length} scored, ranked by Translation Risk
-        {diseases.length > scored.length ? ` · ${diseases.length - scored.length} not yet scored` : ""}. Search
-        or filter below to find one disease, or score the whole portfolio at once.
+        {diseases.length > scored.length ? ` · ${diseases.length - scored.length} not yet scored` : ""}. Every
+        disease below is a member of POROS&rsquo;s frozen 100-disease manuscript cohort — search or filter to
+        find one, or score the whole portfolio at once.
       </p>
 
       {apiError && (

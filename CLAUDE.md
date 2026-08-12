@@ -110,17 +110,27 @@ npm run dev
 | [docs/FEATURE_DICTIONARY.md](docs/FEATURE_DICTIONARY.md) | All 29 features: domain, type, modifiable, description |
 | [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) | Every external API, the SQLite schema, demo/frozen data |
 | [docs/MANUSCRIPT_REQUIREMENTS.md](docs/MANUSCRIPT_REQUIREMENTS.md) | What the manuscript needs from this code, and what's frozen |
+| [docs/VARIABLE_DISPOSITION.md](docs/VARIABLE_DISPOSITION.md) | Draft Implemented/Not-implemented table for every docx-specified variable — needs project-owner review |
 | [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) | Working / broken / planned / legacy / frozen, and open questions |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Human-readable history of meaningful changes |
 
 ## Current development priorities
 
 See [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) for the full, current list — it's
-kept up to date there rather than duplicated here. As of the last update, the top items
-were: fix the `/api/compare` error-path bug that breaks the comparison UI; get a real (or
-demo) dataset populated so disease/portfolio pages aren't empty; finish the RDTI→POROS
-rebrand; replace bare "Type A"/"Type B" UI labels with plain-language explanations; and
-build a public-facing narrative explainer for the manuscript pipeline stages.
+kept up to date there rather than duplicated here. As of the last update, the earlier
+round of product fixes (comparison bug, empty states, rebrand, plain-language labels,
+pipeline explainer, diseases/portfolio merge, per-disease scoring, risk-scale clarity) is
+done, and a "Tier 1" pass has shipped a real 100-disease data refresh, live
+version/provenance visibility (`GET /api/provenance`, Data Provenance section on
+`/methodology`), a draft variable disposition table
+([docs/VARIABLE_DISPOSITION.md](docs/VARIABLE_DISPOSITION.md)), Validated Cohort
+labeling, and per-feature evidence provenance (source links, dates, extractor version).
+**Top remaining items**: Postgres/Supabase migration (blocked on Render credentials this
+session doesn't have), the project owner's own review of
+`docs/VARIABLE_DISPOSITION.md`'s draft categorization, resolving what changed between
+extractor v3.0 and v3.1, and the Tier-2 roadmap (deeper disease-page depth, portfolio
+analytics/filters/export, an explanatory layer on Compare, a public counterfactual/CTR UI,
+evidence-completeness analysis).
 
 ## Things future Claude sessions must not accidentally change
 

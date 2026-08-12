@@ -24,12 +24,25 @@ export interface FeatureRow {
   description: string;
 }
 
+export interface ProvenanceRow {
+  Variable: string;
+  Value: unknown;
+  Source: string;
+  URL: string;
+  SourceDate: string;
+  Retrieved: string;
+  Query: string;
+  Type: "A" | "B";
+  DocTitle: string;
+  ExtractorVersion: string | null;
+}
+
 export interface DiseaseDetail extends DiseaseSummary {
   identity: Record<string, unknown>;
   snapshot: string;
   domain_breakdown: Record<string, FeatureRow[]>;
   primary_barriers: string[];
-  provenance: Record<string, unknown>[];
+  provenance: ProvenanceRow[];
 }
 
 async function getJSON<T>(path: string, opts?: RequestInit): Promise<T> {
@@ -71,6 +84,23 @@ export function getMethodology() {
 
 export function getPortfolio() {
   return getJSON<{ diseases: string[]; count: number }>("/api/portfolio");
+}
+
+export interface ProvenanceSummary {
+  cohort_label: string;
+  cohort_id: string;
+  cohort_size: number;
+  diseases_scored: number;
+  app_version: string;
+  model_version: string;
+  extractor_version: string;
+  latest_evidence_retrieved_at: string | null;
+  snapshot: string;
+  note: string;
+}
+
+export function getProvenanceSummary() {
+  return getJSON<ProvenanceSummary>("/api/provenance");
 }
 
 // ---------------------------------------------------------------------------

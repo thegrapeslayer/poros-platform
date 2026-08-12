@@ -277,6 +277,52 @@ def methodology() -> dict[str, Any]:
     }
 
 
+@app.get("/api/provenance")
+def provenance_summary() -> dict[str, Any]:
+    """Live version/coverage state of the current public portfolio — answers "what
+    exactly produced the scores I'm looking at right now." Distinct from the frozen
+    manuscript bundle (../Manuscript Bundle/), which was generated under an older
+    extractor version (typeB_rules_v3.0) and is not updated by this endpoint or by
+    /api/admin/refresh — see docs/CURRENT_STATUS.md for that unresolved version gap."""
+    cohort_id = portfolio_cohort_id()
+    disease_ids = eng.get_disease_ids_for_names(PORTFOLIO)
+    placeholders = ",".join("?" for _ in disease_ids)
+    scored_count = 0
+    latest_retrieved_at = None
+    if disease_ids:
+        with eng.db_conn() as conn:
+            row = conn.execute(
+                f"""SELECT COUNT(DISTINCT disease_id) FROM feature_values
+                    WHERE disease_id IN ({placeholders}) AND snapshot_date=?""",
+                (*disease_ids, eng.CURRENT_SNAPSHOT),
+            ).fetchone()
+            scored_count = row[0] if row else 0
+            row2 = conn.execute(
+                f"""SELECT MAX(retrieved_at) FROM raw_observations
+                    WHERE disease_id IN ({placeholders}) AND snapshot_date=?""",
+                (*disease_ids, eng.CURRENT_SNAPSHOT),
+            ).fetchone()
+            latest_retrieved_at = row2[0] if row2 else None
+    return {
+        "cohort_label": "Frozen manuscript cohort (DEFAULT_MANUSCRIPT_COHORT)",
+        "cohort_id": cohort_id,
+        "cohort_size": len(PORTFOLIO),
+        "diseases_scored": scored_count,
+        "app_version": eng.APP_VERSION,
+        "model_version": eng.MODEL_VERSION,
+        "extractor_version": eng.EXTRACTOR_VERSION,
+        "latest_evidence_retrieved_at": latest_retrieved_at,
+        "snapshot": eng.CURRENT_SNAPSHOT,
+        "note": (
+            "This reflects the live, current-code state of the public portfolio, scored "
+            "under the extractor/model versions above. It is separate from the frozen "
+            "manuscript bundle checked into the repo (../Manuscript Bundle/), which was "
+            "generated under extractor version typeB_rules_v3.0 and has not been "
+            "regenerated under the current version. See docs/CURRENT_STATUS.md."
+        ),
+    }
+
+
 # -----------------------------------------------------------------------------
 # Admin: trigger evidence retrieval. This calls out to ClinicalTrials.gov,
 # Europe PMC, NIH RePORTER, and openFDA — it needs outbound internet access

@@ -5,6 +5,7 @@ import RiskBadge from "@/components/RiskBadge";
 import DomainBars from "@/components/DomainBars";
 import EvidenceSection from "@/components/EvidenceSection";
 import ScoreDiseaseButton from "@/components/ScoreDiseaseButton";
+import CohortBadge from "@/components/CohortBadge";
 
 type FetchState =
   | { kind: "ok"; disease: Awaited<ReturnType<typeof getDisease>> }
@@ -50,6 +51,9 @@ export default async function DiseaseDetailPage({ params }: { params: { slug: st
     return (
       <div className="max-w-2xl mx-auto px-6 py-24 text-center">
         <p className="eyebrow text-muted mb-3">Not yet scored</p>
+        <div className="flex justify-center mb-4">
+          <CohortBadge status="validated" />
+        </div>
         <h1 className="font-display text-2xl text-ink mb-4">
           {state.name} is in the POROS portfolio but doesn&rsquo;t have a scored snapshot yet.
         </h1>
@@ -88,9 +92,12 @@ export default async function DiseaseDetailPage({ params }: { params: { slug: st
   return (
     <div className="max-w-5xl mx-auto px-6 py-16">
       <p className="eyebrow text-muted mb-2">Disease profile</p>
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-10">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
         <h1 className="font-display text-4xl text-ink">{disease.name}</h1>
         <RiskBadge band={disease.risk_band} />
+      </div>
+      <div className="mb-7">
+        <CohortBadge status="validated" />
       </div>
 
       {/* TRS headline */}

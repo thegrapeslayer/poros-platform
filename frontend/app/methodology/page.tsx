@@ -1,4 +1,4 @@
-import { getMethodology } from "@/lib/api";
+import { getMethodology, getProvenanceSummary } from "@/lib/api";
 
 export const metadata = { title: "Methodology — POROS" };
 
@@ -32,12 +32,27 @@ const EVIDENCE_TYPE_COPY: Record<"A" | "B", { label: string; short: string; deta
   },
 };
 
+function fmtDate(iso: string | null): string {
+  if (!iso) return "no evidence retrieved yet";
+  try {
+    return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  } catch {
+    return iso;
+  }
+}
+
 export default async function MethodologyPage() {
   let m;
+  let prov;
   try {
     m = await getMethodology();
   } catch {
     m = null;
+  }
+  try {
+    prov = await getProvenanceSummary();
+  } catch {
+    prov = null;
   }
 
   if (!m) {
@@ -59,6 +74,49 @@ export default async function MethodologyPage() {
           engine {m.app_version} · model {m.model_version} · extractor {m.extractor_version}
         </p>
       </div>
+
+      {/* Data provenance / versioning */}
+      <section className="mb-14 border hairline rounded-2xl bg-card card-shadow p-6">
+        <h2 className="font-display text-lg text-ink mb-1">Data provenance</h2>
+        <p className="text-xs text-muted mb-5">
+          What produced the scores you&rsquo;re looking at right now, and when.
+        </p>
+        {prov ? (
+          <>
+            <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+              <div>
+                <dt className="text-muted text-xs">Cohort</dt>
+                <dd className="text-ink/90">{prov.cohort_label}</dd>
+              </div>
+              <div>
+                <dt className="text-muted text-xs">Cohort size / scored</dt>
+                <dd className="text-ink/90 font-mono">
+                  {prov.diseases_scored} / {prov.cohort_size}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted text-xs">Scoring model</dt>
+                <dd className="text-ink/90 font-mono">{prov.model_version}</dd>
+              </div>
+              <div>
+                <dt className="text-muted text-xs">Extractor</dt>
+                <dd className="text-ink/90 font-mono">{prov.extractor_version}</dd>
+              </div>
+              <div>
+                <dt className="text-muted text-xs">Latest evidence retrieved</dt>
+                <dd className="text-ink/90">{fmtDate(prov.latest_evidence_retrieved_at)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted text-xs">Cohort ID</dt>
+                <dd className="text-ink/90 font-mono text-xs break-all">{prov.cohort_id}</dd>
+              </div>
+            </dl>
+            <p className="text-xs text-muted mt-5 leading-relaxed border-t hairline pt-4">{prov.note}</p>
+          </>
+        ) : (
+          <p className="text-sm text-muted">Couldn&rsquo;t reach the provenance endpoint.</p>
+        )}
+      </section>
 
       {/* Objective scoring measure explainer */}
       <section className="mb-14 space-y-6">

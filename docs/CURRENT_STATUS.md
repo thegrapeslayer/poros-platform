@@ -1,12 +1,18 @@
 # Current Status
 
-Last updated: 2026-08-12, by a Claude Code pass that merged `/diseases` and `/portfolio`
-into one page, added per-disease scoring (not just whole-portfolio refresh), and made
-domain risk use the same 0–100 scale/direction as TRS everywhere instead of an inverted
-"readiness" concept. Builds on an earlier pass that audited/documented the repo, fixed the
-comparison bug, disease/portfolio empty-state confusion, the RDTI→POROS rebrand, "Type
-A"/"Type B" jargon, and added a manuscript pipeline explainer page — see
-[CHANGELOG.md](CHANGELOG.md) for the full list of what changed in both passes.
+Last updated: 2026-08-12, by a Claude Code "Tier 1" pass addressing what's needed before
+POROS is treated as a real public research platform: a real 100-disease data refresh
+(run against this machine's actual outbound internet, not a sandbox), a Data Provenance
+section surfacing live cohort/version/retrieval-date state, a draft variable disposition
+table (docx rubric vs. implemented features), Validated Cohort status labeling, and
+per-feature evidence provenance (source links, retrieval dates, extractor version) on
+disease pages. **Postgres migration and the extractor v3.0→v3.1 "what changed" question
+are explicitly deferred** — the former needs Render account access, the latter needs the
+project owner's own knowledge; see "Planned / not implemented" and "Unresolved" below.
+Builds on two earlier passes: an initial audit/documentation pass, then a product-fix pass
+(comparison bug, empty-state clarity, RDTI→POROS rebrand, "Type A"/"Type B" jargon,
+manuscript pipeline explainer, diseases/portfolio merge, per-disease scoring, risk-scale
+clarity) — see [CHANGELOG.md](CHANGELOG.md) for the full list across all passes.
 
 **Update this file after any meaningful change** — see
 [CLAUDE.md](../CLAUDE.md#keeping-this-documentation-current). Stale status docs are worse
@@ -87,19 +93,65 @@ than no status docs.
   show risk directly with an explicit caption; verified in a browser on both the disease
   page and the compare radar chart. See
   [ARCHITECTURE.md](ARCHITECTURE.md#resolved-domain-risk-now-uses-the-same-scaledirection-as-trs-everywhere).
+- **Real 100-disease data refresh run**: unlike the sandboxed environment the first two
+  passes ran in, this machine has real outbound internet, so `POST /api/admin/refresh`
+  was run against the full `PORTFOLIO` for real — live ClinicalTrials.gov/Europe
+  PMC/NIH RePORTER/openFDA evidence, not `seed_demo.py` placeholders. See
+  [DATA_SOURCES.md](DATA_SOURCES.md) for exact coverage as of this pass — check
+  `GET /api/provenance` (or the Methodology page's Data Provenance section, next bullet)
+  for the current live count, since a refresh can be re-run any time and this file isn't
+  re-diffed against the database on every edit.
+- **New `GET /api/provenance` endpoint + Data Provenance section on `/methodology`**:
+  surfaces cohort size, diseases actually scored, live `model_version`/`extractor_version`,
+  and the most recent evidence retrieval timestamp, computed live from the database (not
+  hand-maintained text). Directly addresses "the website should show that version
+  somewhere in Methodology/Data Provenance" — the live version is now unambiguous on-site,
+  even though *what changed* between extractor v3.0 and v3.1 remains unresolved (see
+  "Unresolved" below; making the current version visible and reconstructing undocumented
+  history are two different problems, and only the first was solved here).
+- **`CohortBadge` component + "Validated cohort" labeling**: every disease reachable
+  through the public site today is, by construction, a member of
+  `DEFAULT_MANUSCRIPT_COHORT` (== `PORTFOLIO`), so a "Validated cohort" badge now appears
+  on the diseases page header and on every disease detail page (including the "not yet
+  scored" state — cohort membership is prespecified independent of scoring status). The
+  component also defines an `"exploratory"` variant for the day free-text search outside
+  the cohort ships, so that state has a defined look already rather than being invented
+  ad hoc later — but it's not reachable through the UI today (see the portfolio-allowlist
+  point below), so it's unused for now.
+- **Deeper evidence provenance on disease pages**: `provenance_table()` in `engine.py` now
+  LEFT JOINs literature evidence against the `documents` table so a feature's evidence can
+  show the actual PubMed/PMC link and article title, not just an opaque internal
+  `document_id`; it also carries `extractor_version` per literature-evidence row.
+  `EvidenceSection.tsx` was rewritten so each feature within a domain expands to show its
+  specific source(s): clickable link (if any), title, "structured record" vs.
+  "literature-derived," retrieval date, and extractor version — score → variable →
+  evidence → source, in one click-through, per the request. This is a reporting-only
+  change (new columns via a `LEFT JOIN`); it does not touch any scoring math, so it needed
+  no `MODEL_VERSION`/`EXTRACTOR_VERSION` bump.
+- **`docs/VARIABLE_DISPOSITION.md`**: a first-pass Implemented/Not-implemented table for
+  every docx-specified variable, including one code-verifiable case
+  (`active_trials_current` is retrieved by `fetch_clinical_trials()` but has no
+  `FEATURE_SPECS` entry, so it's silently never scored) and the rest marked "TBD — needs
+  your input" rather than guessed. **This table needs the project owner's review before
+  its Status/Reason columns are treated as final** — see the file itself.
 
 ## Implemented but incomplete / broken
 
-- **No populated database in this checkout**: `backend/app/data/` doesn't exist until the
-  backend runs once (created fresh at runtime; `.gitignore` was previously pointed at the
-  wrong path, `backend/data/`, and has been corrected to `backend/app/data/` — see
-  [DATA_SOURCES.md](DATA_SOURCES.md)). Until `POST /api/admin/refresh` is run against a
-  backend with real outbound internet (or `python seed_demo.py` for 3 offline demo
-  diseases), `/api/diseases` returns every portfolio name as unscored. **This is very
-  likely the root cause of the originally reported "disease pages / portfolio 404 or
-  appear broken" symptom** — confirmed locally: after `seed_demo.py`, all pages render
-  real content; before it, they correctly show "not yet scored"/empty states rather than
-  breaking. The UI now clearly labels this state (see above) instead of looking broken.
+- **Portfolio coverage depends on when you last ran a refresh**: `backend/app/data/`
+  doesn't exist until the backend runs once and `POST /api/admin/refresh` (or
+  `python seed_demo.py` for 3 offline demo diseases) has populated it — check
+  `GET /api/provenance`'s `diseases_scored` field for the live count rather than assuming
+  either "0" or "100" here. **This was very likely the root cause of the originally
+  reported "disease pages / portfolio 404 or appear broken" symptom** before this pass —
+  the UI now clearly labels the not-yet-scored state (see above) instead of looking
+  broken, and a real refresh has since been run against this machine's live internet
+  access (see above).
+- **Persistence is still SQLite, and Render's filesystem is ephemeral across deploys**:
+  the score data populated in this pass lives in this machine's local
+  `backend/app/data/evidence/rdti_evidence_v3.sqlite`. If the production deployment target
+  is Render without a persistent disk, every redeploy wipes it and `/api/admin/refresh`
+  must be re-run from scratch — **not fixed in this pass**, see "Planned / not
+  implemented" below.
 - **Portfolio is still a fixed 100-name allowlist, not the backend's actual free-text
   capability**: `engine.resolve_disease()` can score *any* disease query, but the public
   site's routing (`main.PORTFOLIO`, `slugify`/`unslugify_lookup`) only recognizes the 100
@@ -120,13 +172,31 @@ than no status docs.
 - Auth on `/api/research/*` and `/research/*` — intentionally absent per the root
   `README.md`, tied to Research being a planned-for-removal section. If Research is kept
   long-term in a public deployment, this needs to be built.
-- Postgres/Supabase migration — SQLite works today; the migration path is documented in
-  root `README.md` but not started.
-- A resolved answer for "what changed between extractor v3.0 and v3.1" — see next
-  section.
+- **Postgres/Supabase migration — explicitly deferred, not started.** SQLite works for
+  local development, but if the production target is Render without a persistent disk,
+  scores don't survive a redeploy. The migration path is documented in root `README.md`
+  ("Moving to Postgres / Supabase") — only `db_conn()`, `init_db()`, and the
+  `sqlite3`-specific `INSERT ... ON CONFLICT` calls in `engine.py` need to change;
+  everything upstream is storage-agnostic. **Real blocker to doing this now: it needs
+  your Render dashboard access / a `DATABASE_URL`** to actually provision and point at —
+  I can write the code the moment you want to proceed, but can't create the database
+  myself.
+- A resolved answer for "what changed between extractor v3.0 and v3.1" — still open (see
+  "Unresolved" below). What *was* addressed this pass: the live version is no longer
+  ambiguous — `GET /api/provenance` and the Methodology page's Data Provenance section
+  always show the current `model_version`/`extractor_version` and when evidence was last
+  retrieved. What's still missing is a record of what the v3.0→v3.1 rule change actually
+  was, and whether the frozen manuscript bundle should be regenerated to match.
 - Free-text disease search/scoring on the public site (see the portfolio-allowlist point
   above) — would require exposing `engine.resolve_disease()` + an on-demand scoring path
-  through the public API, not just a frontend change.
+  through the public API, not just a frontend change. `CohortBadge`'s `"exploratory"`
+  variant is ready for this the day it ships.
+- Tier 2 roadmap items (deeper disease pages with missingness/completeness/download,
+  portfolio analytics — filters, scatterplots, CSV export, prevalence/trial-phase
+  filters —, an explanatory "what drives the difference" layer on Compare, restoring a
+  public-facing counterfactual/CTR UI, and a dedicated evidence-completeness analysis) —
+  scoped as follow-up work, each large enough to deserve its own focused pass rather than
+  being folded into this one.
 
 ## Legacy / deprecated
 
@@ -168,10 +238,12 @@ Per the audit instructions, these are surfaced rather than silently resolved:
 3. **The Objective Scoring docx rubric specifies ~46 variables; only 29 are implemented**
    in `FEATURE_SPECS` — confirmed by full-text extraction of all six docx files (see
    [MANUSCRIPT_REQUIREMENTS.md](MANUSCRIPT_REQUIREMENTS.md#the-objective-scoring-rubric-specifies-more-than-is-implemented)).
-   Not necessarily a problem (the docx may be a maximal protocol the implementation
-   deliberately scoped down from) but not resolved/annotated anywhere in the repo either.
-   **Needs the project owner to clarify** whether the missing variables are planned future
-   work or a deliberate, documented scope reduction.
+   A draft disposition table now exists at
+   [VARIABLE_DISPOSITION.md](VARIABLE_DISPOSITION.md) listing every gap variable with one
+   code-verifiable exception (`active_trials_current`, retrieved but never scored) and the
+   rest marked "TBD." **Still needs the project owner** to actually decide
+   Excluded-vs-Future-work per row and write the real reason — the draft only organizes
+   the question, it doesn't answer it.
 4. **`AscertainmentCompleteness` has zero variance (constant 100.0) across the frozen
    bundle's 40 scored diseases**, breaking its univariate statistics. **`Regulatory`**'s
    univariate fit is missing a CI/p-value. Both need the project owner's input before any

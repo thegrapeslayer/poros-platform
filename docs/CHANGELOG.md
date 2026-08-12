@@ -15,6 +15,53 @@ Format: newest first. `[Type]` one of `Docs`, `Fix`, `Feature`, `Rebrand`, `Data
 
 ---
 
+## 2026-08-12 — [Feature] Tier-1 "real platform" pass: data, provenance, versioning
+
+Response to a 10-item roadmap for treating POROS as a real public research platform,
+split into what's tractable to do autonomously now vs. what has a genuine external
+blocker (Render/Postgres credentials, or scientific decisions only the project owner can
+make). This entry covers what shipped; see `docs/CURRENT_STATUS.md` for the full
+shipped-vs-deferred breakdown.
+
+- **`[Data]` Real 100-disease refresh**: `POST /api/admin/refresh` run against this
+  machine's actual outbound internet (unlike the sandboxed environment earlier passes ran
+  in) — live ClinicalTrials.gov/Europe PMC/NIH RePORTER/openFDA evidence for the full
+  cohort, not `seed_demo.py` placeholders. Check `GET /api/provenance` for the live
+  scored count at any time.
+- **`[Feature]` `GET /api/provenance` + Data Provenance section on `/methodology`**: live
+  cohort size, diseases scored, `model_version`, `extractor_version`, and most recent
+  evidence retrieval date, computed from the database rather than hand-maintained. Makes
+  the live version unambiguous on-site — does **not** resolve what changed between
+  extractor v3.0 (the frozen bundle) and v3.1 (live code), which remains an open question
+  only the project owner can answer.
+- **`[Docs]` `docs/VARIABLE_DISPOSITION.md`**: draft Implemented/Not-implemented table for
+  all ~46 Objective Scoring docx variables against the 29 implemented in `FEATURE_SPECS`,
+  including one code-verified case (`active_trials_current` is retrieved by
+  `fetch_clinical_trials()` but has no `FEATURE_SPECS` entry — silently never scored).
+  Everything else marked "TBD — needs your input" rather than guessed; **first draft for
+  project-owner review, not a final manuscript decision**.
+- **`[Feature]` `CohortBadge.tsx` — "Validated cohort" labeling**: every disease reachable
+  today is a `DEFAULT_MANUSCRIPT_COHORT` member by construction, so a "Validated cohort"
+  badge now appears on the diseases page and every disease detail page (scored or not —
+  membership is prespecified independent of scoring status). An `"exploratory"` variant
+  is defined and ready for the day free-text search outside the cohort ships, but unused
+  today since that search path doesn't exist yet.
+- **`[Feature]` Deeper evidence provenance**: `provenance_table()` in `engine.py` now
+  LEFT JOINs literature evidence against `documents` for a real PubMed/PMC link + article
+  title per feature (previously just an opaque internal `document_id`), and carries
+  `extractor_version` per literature-evidence row. `EvidenceSection.tsx` rewritten so each
+  feature expands to its specific source(s) — score → variable → evidence → source in one
+  click-through. Reporting-only change (additive `LEFT JOIN`, no scoring math touched), so
+  no version bump needed.
+- **Explicitly deferred, not started**: Postgres/Supabase migration (needs Render
+  dashboard access / a `DATABASE_URL` this session doesn't have — code path is documented
+  in root `README.md` and ready to write once you want to proceed) and reconstructing
+  *what* changed between extractor v3.0 and v3.1 (needs the project owner's own
+  knowledge/notes, not something derivable from the repo as it stands). Tier-2 roadmap
+  items (deeper disease-page depth, portfolio analytics/filters/scatterplots/CSV export,
+  an explanatory layer on Compare, restoring a public CTR UI, evidence-completeness
+  analysis) scoped as follow-up work, not attempted in this pass.
+
 ## 2026-08-12 — [Feature] Merge diseases/portfolio, per-disease scoring, risk-scale clarity
 
 Three product changes requested after using the site: two redundant pages doing the same

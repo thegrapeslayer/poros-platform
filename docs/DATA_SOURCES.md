@@ -1,7 +1,14 @@
 # Data Sources
 
-Status: **implemented and working** for retrieval logic; **no live data in this local
-checkout** — see [CURRENT_STATUS.md](CURRENT_STATUS.md) for what that means in practice.
+Status: **implemented and working**. Retrieval logic is confirmed working end-to-end
+against real APIs, not just read from source — a real `POST /api/admin/refresh` was run
+against this development machine's actual outbound internet (see
+[CHANGELOG.md](CHANGELOG.md)'s 2026-08-12 Tier-1 entry). Check `GET /api/provenance` (or
+the Methodology page's Data Provenance section) for the current live scored-disease count
+— it changes any time a refresh is (re-)run, so don't treat a specific number written here
+as current for long. See [CURRENT_STATUS.md](CURRENT_STATUS.md) for the persistence
+caveat (SQLite + Render's ephemeral filesystem) that still applies regardless of how much
+data is currently populated.
 
 ## Live external APIs
 
@@ -17,11 +24,13 @@ any of them in the current implementation.
 | **openFDA drug labels** (`api.fda.gov/drug/label.json`) | `fda_label_signal` (display-only, not scored — see [FEATURE_DICTIONARY.md](FEATURE_DICTIONARY.md)); also the supplementary approval signal in outcome derivation | `fetch_fda_label_signal()`, `engine.py:1277-1308` | Current-day only — never fetched for historical (`as_of_date`) snapshots. |
 | **NCBI PubMed E-utilities** (`eutils.ncbi.nlm.nih.gov`) | `pubmed_count` (raw observation only — not a `FEATURE_SPECS` entry, not scored) | `fetch_pubmed_count()`, `engine.py:1211-1229` | Context/display metric, separate from the Europe PMC-driven Type B classification pipeline. |
 
-**Network dependency**: this sandbox/dev environment has no outbound internet access to
-any of the above, which is why the local repo has no populated `backend/app/data/` directory
-(see next section). In a normal hosting environment (Render/Railway/Fly for the backend)
-these calls work as written — confirmed by the presence of real historical evidence in
-`../Manuscript Bundle/`, which was generated in an environment with live access.
+**Network dependency**: these calls need real outbound internet, which not every
+environment this repo has been worked in has had (some earlier Claude Code sessions ran
+in a sandbox without it — see `../Manuscript Bundle/`'s historical evidence and this
+pass's real refresh as two separate confirmations that retrieval works given access). If
+`POST /api/admin/refresh` silently makes no progress, check whether the current
+environment can actually reach `clinicaltrials.gov`, `ebi.ac.uk`, `api.reporter.nih.gov`,
+and `api.fda.gov` before assuming a code bug.
 
 ## Persistence: SQLite
 
@@ -30,6 +39,18 @@ these calls work as written — confirmed by the presence of real historical evi
 on first run, gitignored — `.gitignore` previously pointed at the wrong path,
 `backend/data/`, which never matched the engine's actual `ROOT_DIR / "data"` path,
 `backend/app/data/`; corrected during this audit).
+
+**Production persistence risk (unresolved, not fixed in this pass)**: this SQLite file
+lives on local disk. If the backend is deployed to Render (or similar) **without a
+persistent disk**, the filesystem is wiped on every redeploy, silently discarding every
+score, evidence row, and provenance record populated by `/api/admin/refresh` — the next
+deploy starts from an empty database again. Two ways out, neither implemented here: (1)
+attach a Render persistent disk to the existing SQLite path, the smaller change but still
+loses data if the disk is ever detached/resized, or (2) migrate to Postgres/Supabase (see
+root `README.md`'s "Moving to Postgres / Supabase" section) — the clean, durable fix, but
+needs your Render/database credentials to actually provision, which this session doesn't
+have. **Do not assume scores populated by a local refresh (like this pass's) persist in
+your actual production deployment** unless you've confirmed one of these two is in place.
 
 | Table | Holds |
 |---|---|
