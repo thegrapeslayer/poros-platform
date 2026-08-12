@@ -15,6 +15,7 @@ from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from . import engine as eng
@@ -115,10 +116,29 @@ def risk_band(trs: float | None) -> str:
 # Schemas
 # -----------------------------------------------------------------------------
 
+DEFAULT_BASELINE_DATE = eng.DEFAULT_BASELINE_DATE
+DEFAULT_FOLLOWUP_END = eng.DEFAULT_FOLLOWUP_END
+
+
 class RefreshRequest(BaseModel):
     diseases: list[str] | None = None  # defaults to full portfolio
     as_of_date: str | None = None
     force_refresh: bool = False
+
+
+class PipelineRequest(BaseModel):
+    diseases: list[str] | None = None  # defaults to full 100-disease portfolio
+    baseline_date: str = DEFAULT_BASELINE_DATE
+    followup_end: str = DEFAULT_FOLLOWUP_END
+    force_refresh: bool = False
+
+
+class ValidationLabelRequest(BaseModel):
+    human_label: str  # "CONFIRMED_PRESENT" | "NOT_CONFIRMED"
+
+
+class WipeRequest(BaseModel):
+    confirm: bool = False
 
 
 # -----------------------------------------------------------------------------
@@ -289,3 +309,241 @@ def admin_refresh(req: RefreshRequest, background_tasks: BackgroundTasks) -> dic
 @app.get("/api/admin/refresh/status")
 def refresh_status() -> dict[str, Any]:
     return _refresh_status
+
+
+# =============================================================================
+# Research namespace — wraps the manuscript pipeline (engine.py) that already
+# existed but wasn't exposed over HTTP: historical cohort scoring, outcome
+# derivation, predictive/univariate analyses, the Type B validation/QA
+# workflow (with Cohen's kappa), counterfactual scenarios, and export.
+#
+# This is a research-operator surface, not a hardened public API — there's
+# no auth here, matching the original Streamlit app (which only the operator
+# ran locally). If you deploy this publicly and want to keep the Research
+# section, put it behind a login before shipping; if you don't, un-mount
+# this router (see bottom of file) and the rest of the site is unaffected.
+# =============================================================================
+
+_pipeline_status: dict[str, Any] = {
+    "running": False, "step": "", "done": 0, "total": 0, "errors": [],
+    "cohort_id": None, "baseline_date": None, "followup_end": None,
+    "analysis_id": None, "bundle_path": None, "finished_at": None,
+}
+
+
+def _run_pipeline(names: list[str], baseline_date: str, followup_end: str, force_refresh: bool) -> None:
+    _pipeline_status.update(
+        running=True, step="Starting", done=0, total=len(names), errors=[],
+        cohort_id=None, baseline_date=baseline_date, followup_end=followup_end,
+        analysis_id=None, bundle_path=None, finished_at=None,
+    )
+
+    def progress(done: int, total: int, step: str) -> None:
+        _pipeline_status.update(done=done, total=total, step=step)
+
+    try:
+        result = eng.run_full_manuscript_pipeline(
+            names, baseline_date=baseline_date, followup_end=followup_end,
+            force_refresh=force_refresh, progress_callback=progress,
+        )
+        _pipeline_status.update(
+            cohort_id=result["cohort_id"], analysis_id=result["analysis_id"],
+            bundle_path=str(result["bundle"]), errors=result["errors"],
+            step="Complete",
+        )
+    except Exception as exc:
+        _pipeline_status["errors"].append({"error": str(exc), "trace": traceback.format_exc()})
+        _pipeline_status["step"] = "Failed"
+    finally:
+        _pipeline_status["running"] = False
+        _pipeline_status["finished_at"] = eng.now_iso()
+
+
+@app.post("/api/research/pipeline/run")
+def research_pipeline_run(req: PipelineRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
+    """Runs the full manuscript pipeline: historical snapshot -> score ->
+    outcome derivation -> predictive/univariate analyses -> counterfactual
+    scan of high-risk diseases -> exportable bundle. This calls out to
+    ClinicalTrials.gov / Europe PMC / NIH RePORTER / openFDA for every
+    disease at the historical cutoff, so it needs real outbound internet and
+    can take a while for 20-40+ diseases. Requires >= 8 diseases."""
+    if _pipeline_status["running"]:
+        raise HTTPException(409, "A research pipeline run is already in progress.")
+    names = req.diseases or eng.DEFAULT_MANUSCRIPT_COHORT
+    if len(names) < 8:
+        raise HTTPException(400, "Use at least 8 diseases for manuscript analysis; 20-40 is preferable.")
+    background_tasks.add_task(_run_pipeline, names, req.baseline_date, req.followup_end, req.force_refresh)
+    return {"started": True, "count": len(names), "baseline_date": req.baseline_date, "followup_end": req.followup_end}
+
+
+@app.get("/api/research/pipeline/status")
+def research_pipeline_status() -> dict[str, Any]:
+    return _pipeline_status
+
+
+@app.get("/api/research/pipeline/config")
+def research_pipeline_config() -> dict[str, Any]:
+    return {
+        "default_baseline_date": DEFAULT_BASELINE_DATE,
+        "default_followup_end": DEFAULT_FOLLOWUP_END,
+        "default_cohort_size": len(eng.DEFAULT_MANUSCRIPT_COHORT),
+        "default_cohort": eng.DEFAULT_MANUSCRIPT_COHORT,
+        "outcome_definition": (
+            "Primary outcome (Phase3Outcome): first Phase III interventional study start date falls within "
+            "[baseline_date, followup_end]. Composite LateStageOutcome additionally counts an openFDA label "
+            "effective date in that window as a supplementary approval signal."
+        ),
+    }
+
+
+def _require_last_pipeline() -> dict[str, str]:
+    if not _pipeline_status.get("cohort_id"):
+        raise HTTPException(
+            404,
+            "No completed research pipeline run yet. POST /api/research/pipeline/run first "
+            "(needs outbound internet access to ClinicalTrials.gov / Europe PMC / NIH RePORTER / openFDA).",
+        )
+    return {
+        "cohort_id": _pipeline_status["cohort_id"],
+        "baseline_date": _pipeline_status["baseline_date"],
+        "followup_end": _pipeline_status["followup_end"],
+    }
+
+
+@app.get("/api/research/dataset")
+def research_dataset() -> dict[str, Any]:
+    """The frozen manuscript_dataset.csv equivalent: one row per disease with
+    domain scores, TRS, completeness/coverage, and derived outcomes."""
+    ctx = _require_last_pipeline()
+    df = eng.manuscript_dataset(ctx["cohort_id"], ctx["baseline_date"], ctx["baseline_date"], ctx["followup_end"])
+    return {"cohort_id": ctx["cohort_id"], "baseline_date": ctx["baseline_date"], "followup_end": ctx["followup_end"],
+            "rows": df.to_dict(orient="records"), "n": len(df)}
+
+
+@app.get("/api/research/analyses")
+def research_analyses(outcome: str = "Phase3Outcome") -> dict[str, Any]:
+    """Predictive/univariate statistics: model AUCs (bootstrap CI), per-domain
+    univariate logistic regressions (OR, CI, p-value), and a domain
+    correlation matrix — the Results-section numbers for the manuscript."""
+    ctx = _require_last_pipeline()
+    df = eng.manuscript_dataset(ctx["cohort_id"], ctx["baseline_date"], ctx["baseline_date"], ctx["followup_end"])
+    if df.empty:
+        raise HTTPException(404, "Dataset is empty for the last pipeline run.")
+    return eng.run_manuscript_analyses(df, outcome)
+
+
+@app.get("/api/research/counterfactual")
+def research_counterfactual(disease: str = Query(...), feature: str = Query(...)) -> dict[str, Any]:
+    """Change one modifiable, factual Type B input for one disease and
+    rerun the identical scoring function — a model-based scenario, not a
+    causal claim (see engine.py's counterfactual_for_feature docstring)."""
+    ctx = _require_last_pipeline()
+    name = unslugify_lookup(slugify(disease)) or disease
+    identity = eng.resolve_disease(name)
+    if feature not in eng.FEATURE_SPECS:
+        raise HTTPException(404, f"Unknown feature_id '{feature}'. See /api/methodology for valid feature ids.")
+    try:
+        result = eng.counterfactual_for_feature(
+            identity["disease_id"], ctx["baseline_date"], ctx["cohort_id"], feature,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    result["disease"] = identity.get("canonical_name") or name
+    return result
+
+
+@app.get("/api/research/counterfactual/rank")
+def research_counterfactual_rank(disease: str = Query(...)) -> dict[str, Any]:
+    """Every eligible modifiable feature for one disease, ranked by
+    model-predicted ΔTRS — 'which lever matters most for this disease'."""
+    ctx = _require_last_pipeline()
+    name = unslugify_lookup(slugify(disease)) or disease
+    identity = eng.resolve_disease(name)
+    df = eng.rank_counterfactuals(identity["disease_id"], ctx["baseline_date"], ctx["cohort_id"])
+    return {"disease": identity.get("canonical_name") or name, "rows": df.to_dict(orient="records") if len(df) else []}
+
+
+@app.get("/api/research/counterfactual/cohort")
+def research_counterfactual_cohort(outcome: str = "Phase3Outcome", top_fraction: float = 0.25) -> dict[str, Any]:
+    """Runs the ranked counterfactual scan across the highest-risk quartile
+    (default) of the cohort — answers whether one intervention dominates
+    across diseases or the best lever is idiosyncratic per disease."""
+    ctx = _require_last_pipeline()
+    df = eng.manuscript_dataset(ctx["cohort_id"], ctx["baseline_date"], ctx["baseline_date"], ctx["followup_end"])
+    if df.empty:
+        raise HTTPException(404, "Dataset is empty for the last pipeline run.")
+    cf = eng.cohort_counterfactual_analysis(df, ctx["baseline_date"], ctx["cohort_id"], outcome, top_fraction)
+    return {"rows": cf.to_dict(orient="records") if len(cf) else [], "n": len(cf)}
+
+
+@app.get("/api/research/validation-sample")
+def research_validation_sample(n: int = Query(75, ge=10, le=500)) -> dict[str, Any]:
+    """Random sample of Type B extractor decisions for human QA review.
+    Per the project's own audit: this is an extractor QA pass, not a formal
+    independent second human rater — see the rater_note on the metrics
+    endpoint below."""
+    df = eng.validation_sample(n)
+    return {"rows": df.to_dict(orient="records") if len(df) else [], "n": len(df)}
+
+
+@app.post("/api/research/validation-sample/{evidence_id}")
+def research_validation_label(evidence_id: int, req: ValidationLabelRequest) -> dict[str, Any]:
+    if req.human_label not in ("CONFIRMED_PRESENT", "NOT_CONFIRMED"):
+        raise HTTPException(400, "human_label must be CONFIRMED_PRESENT or NOT_CONFIRMED.")
+    eng.save_human_validation(evidence_id, req.human_label)
+    return {"saved": True, "evidence_id": evidence_id, "human_label": req.human_label}
+
+
+@app.get("/api/research/extractor-metrics")
+def research_extractor_metrics() -> dict[str, Any]:
+    """Accuracy/precision/recall/specificity/Cohen's kappa of the Type B
+    extractor against whatever human labels have been saved so far via the
+    validation-sample endpoint above."""
+    return eng.extractor_validation_metrics()
+
+
+@app.get("/api/research/extractor-versions/stale")
+def research_stale_versions() -> dict[str, Any]:
+    return {"stale_versions": eng.stale_extractor_versions(), "current_version": eng.EXTRACTOR_VERSION}
+
+
+@app.post("/api/research/extractor-versions/wipe")
+def research_wipe_stale(req: WipeRequest) -> dict[str, Any]:
+    if not req.confirm:
+        raise HTTPException(400, "Pass {\"confirm\": true} to actually delete stale extractor evidence.")
+    n = eng.wipe_type_b_evidence(exclude_version=eng.EXTRACTOR_VERSION)
+    return {"deleted_rows": n, "kept_version": eng.EXTRACTOR_VERSION}
+
+
+@app.get("/api/research/methods-snapshot")
+def research_methods_snapshot() -> dict[str, str]:
+    """Plain-text Methods-section paragraph, generated from the live
+    cohort/version state rather than hand-maintained separately."""
+    ctx = _require_last_pipeline()
+    text = eng.methods_snapshot_text(ctx["cohort_id"], ctx["baseline_date"], "Phase3Outcome")
+    return {"text": text}
+
+
+@app.get("/api/research/export")
+def research_export() -> FileResponse:
+    """Rebuilds and returns the full manuscript bundle zip: dataset CSV,
+    analysis JSON, counterfactual CSV, univariate CSV, methods snapshot,
+    feature dictionary, figures, and a provenance copy of the database."""
+    ctx = _require_last_pipeline()
+    df = eng.manuscript_dataset(ctx["cohort_id"], ctx["baseline_date"], ctx["baseline_date"], ctx["followup_end"])
+    if df.empty:
+        raise HTTPException(404, "Dataset is empty for the last pipeline run.")
+    analyses = eng.run_manuscript_analyses(df, "Phase3Outcome")
+    counterfactuals = eng.cohort_counterfactual_analysis(df, ctx["baseline_date"], ctx["cohort_id"], "Phase3Outcome")
+    bundle = eng.export_manuscript_bundle(
+        df, analyses, counterfactuals, ctx["cohort_id"], ctx["baseline_date"], "Phase3Outcome"
+    )
+    return FileResponse(str(bundle), filename=bundle.name, media_type="application/zip")
+
+
+@app.get("/api/research/smoke-test")
+def research_smoke_test() -> dict[str, Any]:
+    """Runs engine.smoke_test_math() — a pure in-memory check that scoring
+    logic behaves correctly (e.g. confirming a modifiable feature can only
+    ever lower or hold risk, never raise it). No network calls."""
+    return eng.smoke_test_math()

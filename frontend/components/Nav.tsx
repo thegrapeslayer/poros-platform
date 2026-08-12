@@ -5,6 +5,7 @@ const LINKS = [
   { href: "/portfolio", label: "Portfolio" },
   { href: "/compare", label: "Compare" },
   { href: "/methodology", label: "Methodology" },
+  { href: "/research", label: "Research" },
 ];
 
 export default function Nav() {

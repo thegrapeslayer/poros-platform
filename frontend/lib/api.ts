@@ -73,4 +73,195 @@ export function getPortfolio() {
   return getJSON<{ diseases: string[]; count: number }>("/api/portfolio");
 }
 
+// ---------------------------------------------------------------------------
+// Research namespace — wraps the manuscript pipeline (historical cohort
+// scoring, outcome derivation, predictive analyses, Type B validation/QA,
+// counterfactuals, export). Operator-facing, no auth — see README before
+// deploying this section publicly.
+// ---------------------------------------------------------------------------
+
+export interface PipelineStatus {
+  running: boolean;
+  step: string;
+  done: number;
+  total: number;
+  errors: unknown[];
+  cohort_id: string | null;
+  baseline_date: string | null;
+  followup_end: string | null;
+  analysis_id: string | null;
+  bundle_path: string | null;
+  finished_at: string | null;
+}
+
+export interface PipelineConfig {
+  default_baseline_date: string;
+  default_followup_end: string;
+  default_cohort_size: number;
+  default_cohort: string[];
+  outcome_definition: string;
+}
+
+export function getPipelineConfig() {
+  return getJSON<PipelineConfig>("/api/research/pipeline/config");
+}
+
+export function getPipelineStatus() {
+  return getJSON<PipelineStatus>("/api/research/pipeline/status");
+}
+
+export function runPipeline(body: {
+  diseases?: string[];
+  baseline_date?: string;
+  followup_end?: string;
+  force_refresh?: boolean;
+}) {
+  return getJSON<{ started: boolean; count: number }>("/api/research/pipeline/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function getResearchDataset() {
+  return getJSON<{ cohort_id: string; baseline_date: string; followup_end: string; rows: Record<string, unknown>[]; n: number }>(
+    "/api/research/dataset"
+  );
+}
+
+export interface ModelResult {
+  features: string[];
+  n?: number;
+  error?: string;
+  auc?: number;
+  auc_ci?: [number, number] | null;
+  brier?: number;
+}
+
+export interface UnivariateResult {
+  predictor: string;
+  n: number;
+  error?: string;
+  odds_ratio?: number;
+  ci?: [number, number];
+  p_value?: number;
+}
+
+export interface AnalysesResult {
+  outcome: string;
+  n_total: number;
+  n_outcomes: number;
+  events: number;
+  models: Record<string, ModelResult>;
+  univariate: UnivariateResult[];
+  correlations: Record<string, Record<string, number>>;
+}
+
+export function getResearchAnalyses(outcome = "Phase3Outcome") {
+  return getJSON<AnalysesResult>(`/api/research/analyses?outcome=${encodeURIComponent(outcome)}`);
+}
+
+export interface CounterfactualResult {
+  counterfactual_id?: string;
+  feature_id: string;
+  label?: string;
+  eligible: boolean;
+  reason?: string;
+  observed?: unknown;
+  scenario?: unknown;
+  baseline_trs: number | null;
+  scenario_trs: number | null;
+  delta_trs: number | null;
+  baseline_probability?: number | null;
+  scenario_probability?: number | null;
+  delta_probability?: number | null;
+  disease?: string;
+}
+
+export function getCounterfactual(disease: string, feature: string) {
+  return getJSON<CounterfactualResult>(
+    `/api/research/counterfactual?disease=${encodeURIComponent(disease)}&feature=${encodeURIComponent(feature)}`
+  );
+}
+
+export function getCounterfactualRank(disease: string) {
+  return getJSON<{ disease: string; rows: CounterfactualResult[] }>(
+    `/api/research/counterfactual/rank?disease=${encodeURIComponent(disease)}`
+  );
+}
+
+export function getCounterfactualCohort(outcome = "Phase3Outcome", topFraction = 0.25) {
+  return getJSON<{ rows: (CounterfactualResult & { Disease: string; rank: number })[]; n: number }>(
+    `/api/research/counterfactual/cohort?outcome=${encodeURIComponent(outcome)}&top_fraction=${topFraction}`
+  );
+}
+
+export interface ValidationRow {
+  evidence_id: number;
+  Disease: string;
+  snapshot_date: string;
+  feature_id: string;
+  status: string;
+  confidence: number;
+  supporting_snippet: string | null;
+  document_id: string | null;
+  reviewed: number;
+  human_label: string | null;
+}
+
+export function getValidationSample(n = 75) {
+  return getJSON<{ rows: ValidationRow[]; n: number }>(`/api/research/validation-sample?n=${n}`);
+}
+
+export function saveValidationLabel(evidenceId: number, humanLabel: "CONFIRMED_PRESENT" | "NOT_CONFIRMED") {
+  return getJSON<{ saved: boolean }>(`/api/research/validation-sample/${evidenceId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ human_label: humanLabel }),
+  });
+}
+
+export interface ExtractorMetrics {
+  n: number;
+  error?: string;
+  accuracy?: number;
+  precision?: number;
+  recall?: number;
+  specificity?: number | null;
+  cohen_kappa?: number | null;
+  tp?: number;
+  tn?: number;
+  fp?: number;
+  fn?: number;
+  rater_note?: string;
+}
+
+export function getExtractorMetrics() {
+  return getJSON<ExtractorMetrics>("/api/research/extractor-metrics");
+}
+
+export function getStaleExtractorVersions() {
+  return getJSON<{ stale_versions: string[]; current_version: string }>("/api/research/extractor-versions/stale");
+}
+
+export function wipeStaleExtractorVersions() {
+  return getJSON<{ deleted_rows: number; kept_version: string }>("/api/research/extractor-versions/wipe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm: true }),
+  });
+}
+
+export function getMethodsSnapshot() {
+  return getJSON<{ text: string }>("/api/research/methods-snapshot");
+}
+
+export function getSmokeTest() {
+  return getJSON<Record<string, unknown>>("/api/research/smoke-test");
+}
+
+export function exportBundleUrl() {
+  return `${API_BASE}/api/research/export`;
+}
+
 export { API_BASE };
