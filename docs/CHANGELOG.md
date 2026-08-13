@@ -15,6 +15,41 @@ Format: newest first. `[Type]` one of `Docs`, `Fix`, `Feature`, `Rebrand`, `Data
 
 ---
 
+## 2026-08-12 — [Methodology] Full variable disposition audit (v2)
+
+Replaced the earlier first-pass `docs/VARIABLE_DISPOSITION.md` draft (which mostly
+marked gaps "TBD") with a code-audited reconciliation of all 46 Objective Scoring rubric
+variables against the 29 implemented `FEATURE_SPECS`: **24 implemented, 3 merged, 16
+excluded, 3 future work, 0 unresolved.** Every rationale ties to a checkable code
+capability (which of the 4 integrated APIs could supply it, what the paired-regex Type B
+classifier can structurally distinguish, what `as_of_date` historical filtering can
+reconstruct) rather than asserting "not implemented" as a bare reason, per the project
+owner's explicit requirement that exclusions read as methodological decisions, not
+oversights. Key findings: present-day FDA approval status is deliberately unscored to
+avoid predictor/outcome leakage against the study's own validation design (traced
+directly to the rubric's own Master Index non-negotiable exclusion rule); registry
+evidence and consensus-guidance evidence are each specified twice in the rubric (across
+two domains, or as two separate constructs) but implemented as a single feature, which
+changes how manuscript Methods text should describe domain attribution; and three gaps
+(sponsor concentration, industry-academic collaboration, a live-only recruiting-trial
+count) already have their underlying raw data retrieved, making them lower-effort future
+additions than the other 13 exclusions. No scoring code was changed — this is a
+documentation/reconciliation pass only, explicitly required to precede any code changes.
+Still needs the project owner's sign-off before being cited in a manuscript methods
+section.
+
+## 2026-08-12 — [Data] Postgres migration sequencing decided; not started yet
+
+Project owner created a `poros-db` Postgres instance on Render and provided a full
+`SQLAlchemy + psycopg + Alembic` migration plan (centralized `database.py`, DATABASE_URL
+env-driven with a SQLite fallback for local dev, a one-time `migrate_sqlite_to_postgres.py`
+import script with pre/post row-count validation, and test coverage across every table).
+Explicitly sequenced to happen **after** the scientific freeze (this variable-disposition
+audit), not before — deferred, not blocked. Nothing in `backend/app/engine.py`'s
+persistence layer has changed yet.
+
+---
+
 ## 2026-08-12 — [Feature] Tier-1 "real platform" pass: data, provenance, versioning
 
 Response to a 10-item roadmap for treating POROS as a real public research platform,

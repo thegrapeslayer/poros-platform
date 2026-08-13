@@ -79,18 +79,19 @@ extractor v3.0 specifically, not to "the current app."
 
 `../Objective Scoring/*.docx` (six documents: a master index plus one per domain 01-05,
 plus 06 for the counterfactual/CTR layer) is the **conceptual scoring protocol/rubric**.
-It is broader than what `FEATURE_SPECS` actually implements — direct text extraction
-found **~46 variables specified in the docx set versus 29 implemented** in
-`feature_dictionary.csv`/`engine.py`. Treat the docx set as "the prespecified protocol
-this pipeline is a implementation of," not as a 1:1 spec of the current code. Variables
-in the docx with no corresponding `FEATURE_SPECS` entry (e.g. "sponsor concentration
-(HHI)" and "program discontinuation burden" under Economic; "dominant mechanistic
-convergence" and "therapeutic modality precedent" under Biological; "approved therapy for
-same disease" under Regulatory) are **not implemented and not scored** — do not assume
-they exist just because the docx describes them. The full domain-by-domain list, with a
-draft Implemented/Not-implemented disposition per variable, is in
-[VARIABLE_DISPOSITION.md](VARIABLE_DISPOSITION.md) — **that table is a first-pass draft
-needing the project owner's review**, not a finished manuscript decision.
+It is broader than what `FEATURE_SPECS` actually implements. A full variable-by-variable
+audit — every rubric item checked against the live code, not summarized from memory —
+lives in [VARIABLE_DISPOSITION.md](VARIABLE_DISPOSITION.md): **46 specified, 24
+implemented cleanly, 3 merged (registry evidence and consensus-guidance wording each
+collapse two rubric items into one scored feature), 16 excluded, 3 deferred as future
+work, 0 unresolved.** Every exclusion cites a specific code capability limit (which API
+could supply it, what the Type B classifier can structurally distinguish, what
+`as_of_date` can reconstruct) rather than "not implemented" as a bare reason — including
+one exclusion (present-day FDA approval status) that traces directly to the rubric's own
+Master Index non-negotiable exclusion against predictor/outcome leakage. **That document
+is still a proposal for the project owner's review, not a finished manuscript decision**
+— in particular the MERGED and FUTURE WORK rows are the ones most likely to change if the
+owner decides differently.
 
 **"Type A" / "Type B" is implementation vocabulary, not manuscript vocabulary.** A full
 text search of all six Objective Scoring docx files found zero occurrences of "Type A" or

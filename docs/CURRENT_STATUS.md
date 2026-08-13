@@ -131,12 +131,16 @@ than no status docs.
   evidence → source, in one click-through, per the request. This is a reporting-only
   change (new columns via a `LEFT JOIN`); it does not touch any scoring math, so it needed
   no `MODEL_VERSION`/`EXTRACTOR_VERSION` bump.
-- **`docs/VARIABLE_DISPOSITION.md`**: a first-pass Implemented/Not-implemented table for
-  every docx-specified variable, including one code-verifiable case
-  (`active_trials_current` is retrieved by `fetch_clinical_trials()` but has no
-  `FEATURE_SPECS` entry, so it's silently never scored) and the rest marked "TBD — needs
-  your input" rather than guessed. **This table needs the project owner's review before
-  its Status/Reason columns are treated as final** — see the file itself.
+- **`docs/VARIABLE_DISPOSITION.md` v2**: a full code-audited reconciliation of all 46
+  rubric variables — 24 implemented, 3 merged, 16 excluded, 3 future work, 0 unresolved —
+  each with a rationale tied to one of 8 methodological categories (source availability,
+  extraction-rule objectivity, historical-snapshot reliability, redundancy, leakage, etc.)
+  and cross-checked against specific file:line evidence, not asserted from memory. One
+  exclusion (present-day FDA approval status) traces directly to the rubric's own Master
+  Index leakage rule. **Still needs the project owner's sign-off before being cited in a
+  manuscript methods section** — the MERGED and FUTURE WORK rows in particular represent
+  real decisions (e.g. whether registry evidence should count toward the Infrastructure
+  domain too) that only the owner can make.
 
 ## Implemented but incomplete / broken
 
@@ -238,15 +242,20 @@ Per the audit instructions, these are surfaced rather than silently resolved:
    "original `app.py`" the README refers to, or whether it was renamed/consolidated at
    some point before this repo's history began. Not resolved here — flagged for the
    project owner.
-3. **The Objective Scoring docx rubric specifies ~46 variables; only 29 are implemented**
-   in `FEATURE_SPECS` — confirmed by full-text extraction of all six docx files (see
-   [MANUSCRIPT_REQUIREMENTS.md](MANUSCRIPT_REQUIREMENTS.md#the-objective-scoring-rubric-specifies-more-than-is-implemented)).
-   A draft disposition table now exists at
-   [VARIABLE_DISPOSITION.md](VARIABLE_DISPOSITION.md) listing every gap variable with one
-   code-verifiable exception (`active_trials_current`, retrieved but never scored) and the
-   rest marked "TBD." **Still needs the project owner** to actually decide
-   Excluded-vs-Future-work per row and write the real reason — the draft only organizes
-   the question, it doesn't answer it.
+3. **The Objective Scoring docx rubric specifies 46 variables; 24 are implemented
+   cleanly, 3 are merged, 16 excluded, 3 deferred as future work** — a full,
+   code-audited per-variable reconciliation with methodological rationale now exists at
+   [VARIABLE_DISPOSITION.md](VARIABLE_DISPOSITION.md) (see
+   [MANUSCRIPT_REQUIREMENTS.md](MANUSCRIPT_REQUIREMENTS.md#the-objective-scoring-rubric-specifies-more-than-is-implemented)
+   for the short version). **Still needs the project owner's sign-off** before it's cited
+   as a manuscript methods decision — every rationale is grounded in a checkable code
+   capability limit, not recovered developer intent, and the document says so explicitly.
+   The rows most likely to change on review: the two MERGED items (registry evidence
+   scored under Clinical only, not also Infrastructure; diagnostic-criteria and
+   management-guideline evidence collapsed into one feature) and the 3 FUTURE WORK items
+   (sponsor concentration, industry-academic collaboration, live-only recruiting-trial
+   count) — each has underlying data already retrieved, so adding them is lower-effort
+   than the other 13 excluded items, which would need genuinely new data sources.
 4. **`AscertainmentCompleteness` has zero variance (constant 100.0) across the frozen
    bundle's 40 scored diseases**, breaking its univariate statistics. **`Regulatory`**'s
    univariate fit is missing a CI/p-value. Both need the project owner's input before any
