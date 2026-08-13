@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAdminRefreshStatus, startAdminRefresh } from "@/lib/api";
+import { useAdminScore } from "@/lib/useAdminScore";
 
 // Lets a user score exactly one disease instead of always needing the full
 // ~100-disease portfolio refresh. Uses the same admin-refresh endpoint/queue as the
@@ -23,48 +22,11 @@ export default function ScoreDiseaseButton({
   className?: string;
 }) {
   const router = useRouter();
-  const [state, setState] = useState<"idle" | "starting" | "running" | "busy-elsewhere" | "error" | "done">("idle");
-  const [error, setError] = useState<string | null>(null);
-  const pollingRef = useRef(false);
-
-  useEffect(() => () => {
-    pollingRef.current = false;
-  }, []);
-
-  async function pollUntilDone() {
-    pollingRef.current = true;
-    while (pollingRef.current) {
-      await new Promise((r) => setTimeout(r, 2000));
-      try {
-        const s = await getAdminRefreshStatus();
-        if (!s.running) {
-          pollingRef.current = false;
-          setState("done");
-          router.refresh();
-          return;
-        }
-      } catch {
-        // keep polling — a transient network hiccup shouldn't abandon the poll
-      }
-    }
-  }
+  const { state, error, score } = useAdminScore();
 
   async function handleClick() {
-    setError(null);
-    setState("starting");
-    try {
-      const current = await getAdminRefreshStatus().catch(() => null);
-      if (current?.running) {
-        setState("busy-elsewhere");
-        return;
-      }
-      await startAdminRefresh([name]);
-      setState("running");
-      pollUntilDone();
-    } catch (e) {
-      setState("error");
-      setError(e instanceof Error ? e.message : "Couldn't start scoring.");
-    }
+    const done = await score(name);
+    if (done) router.refresh();
   }
 
   if (state === "done") {

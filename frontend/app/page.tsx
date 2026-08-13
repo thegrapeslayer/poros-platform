@@ -3,6 +3,11 @@ import { listDiseases } from "@/lib/api";
 import DiseaseCard from "@/components/DiseaseCard";
 import SearchBar from "@/components/SearchBar";
 
+// Stats and the "highest risk right now" preview must never be served from a stale
+// route cache — scoring a disease from the search bar or the diseases page should be
+// reflected the moment someone lands back here, not up to 30s later.
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   let diseases: Awaited<ReturnType<typeof listDiseases>>["diseases"] = [];
   let apiError = false;
@@ -32,7 +37,7 @@ export default async function HomePage() {
           literature &mdash; then traces every score back to its source.
         </p>
         <div className="mt-8 max-w-xl">
-          <SearchBar diseases={diseases.map((d) => ({ name: d.name, slug: d.slug }))} />
+          <SearchBar diseases={diseases.map((d) => ({ name: d.name, slug: d.slug, trs: d.trs }))} />
         </div>
       </section>
 

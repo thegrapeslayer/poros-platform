@@ -131,6 +131,24 @@ disease's own page when it hits the "not yet scored" state, with the canonical d
 name parsed out of the backend's `"No snapshot for '{name}' yet"` error text via
 `loadDisease()` in `disease/[slug]/page.tsx`, avoiding an extra round trip.
 
+## Search-triggered scoring
+
+`SearchBar.tsx` (homepage) now knows each option's `trs`. Selecting an already-scored
+disease navigates immediately, same as before. Selecting an **unscored** one instead
+starts a single-disease refresh and only navigates once it completes — the search bar
+itself becomes the loading state (input replaced by a "Scoring {name}…" status line)
+rather than sending the user to the disease page first to discover it isn't scored yet
+and has to be scored from there. `ScoreDiseaseButton.tsx` and `SearchBar.tsx` both build
+on a shared `useAdminScore()` hook (`lib/useAdminScore.ts`) — start-refresh-then-poll
+logic lived only in `ScoreDiseaseButton` before this and would have been duplicated
+rather than reused.
+
+Homepage (`app/page.tsx`) and `/diseases` both set `export const dynamic =
+"force-dynamic"` so their stats (disease/scored/high-risk counts, the "highest risk right
+now" preview) are never served from Next's client-side route cache — a score triggered
+from search or a table row must be reflected the moment either page is next visited, not
+up to ~30s later from a stale cached render.
+
 ## Routing / slug contract
 
 Disease slugs are generated **only** server-side, in Python: `slugify()`

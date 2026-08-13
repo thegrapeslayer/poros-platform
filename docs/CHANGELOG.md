@@ -15,6 +15,21 @@ Format: newest first. `[Type]` one of `Docs`, `Fix`, `Feature`, `Rebrand`, `Data
 
 ---
 
+## 2026-08-12 — [Feature] Search-triggered scoring; live homepage/diseases stats
+
+Selecting an unscored disease from the homepage search bar now scores it automatically
+and navigates to its profile once done, instead of landing on the "not yet scored" page
+requiring a separate manual step. Extracted the start-refresh-then-poll logic shared by
+`ScoreDiseaseButton` and the search bar into `lib/useAdminScore.ts` rather than
+duplicating it. Also added `export const dynamic = "force-dynamic"` to the homepage and
+`/diseases` so their stats (disease/scored/high-risk counts, "highest risk right now")
+always reflect the latest score, never a stale cached render. Verified end-to-end
+locally: temporarily un-scored a real disease, searched for it, confirmed the "Scoring…"
+state, backend refresh status, and automatic navigation to a fully-populated profile, all
+with clean network/console output.
+
+---
+
 ## 2026-08-12 — [Methodology] Full variable disposition audit (v2)
 
 Replaced the earlier first-pass `docs/VARIABLE_DISPOSITION.md` draft (which mostly

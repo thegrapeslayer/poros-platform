@@ -4,6 +4,9 @@ import PortfolioRefresh from "@/components/PortfolioRefresh";
 import CohortBadge from "@/components/CohortBadge";
 
 export const metadata = { title: "Diseases — POROS" };
+// Same reasoning as the homepage: counts here must reflect a score run from anywhere
+// on the site immediately, not up to 30s later from a cached route.
+export const dynamic = "force-dynamic";
 
 export default async function DiseasesPage() {
   let diseases: Awaited<ReturnType<typeof listDiseases>>["diseases"] = [];
