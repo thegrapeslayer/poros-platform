@@ -15,6 +15,46 @@ Format: newest first. `[Type]` one of `Docs`, `Fix`, `Feature`, `Rebrand`, `Data
 
 ---
 
+## 2026-08-14 — [Data] Froze the historical manuscript dataset; added per-feature validation metrics
+
+Ran `POST /api/research/pipeline/run` for real against the full 100-disease cohort at
+the 2015-12-31 baseline — 100/100 diseases scored, 0 errors, extractor `typeB_rules_v3.1`
+(current code, not the stale v3.0 the old bundle was under). Installed `matplotlib`
+(added to `requirements.txt`; was previously absent, so the bundle's 4 figures had never
+actually been generated in this environment) and regenerated the bundle a second time to
+include them, reusing already-computed data with no new API calls
+(`backend/scripts/regenerate_manuscript_bundle.py`). Archived the complete bundle to
+`../Manuscript Bundle/frozen_2026-08-14_typeB_rules_v3.1_n100/` with a README documenting
+cohort_id, versions, top-line AUCs (TRS alone 0.822; TRS+EvidenceCoverage 0.837;
+five-domain multivariate 0.838), and contents — the old 40-disease/v3.0 bundle is left in
+place for history, not deleted. Re-checked the previously-flagged data-quality issues
+against this new bundle: `AscertainmentCompleteness`'s zero-variance problem is resolved
+(now has real variance and a computable, if wide, CI); the `Regulatory` domain's missing
+univariate CI persists; the "undocumented 10-disease counterfactual subset" turned out to
+just be the documented top-25%-by-risk default, not an anomaly.
+
+Also added **per-feature** extractor-validation metrics (`extractor_validation_metrics()`
+now reports accuracy/precision/recall/F1/specificity/Cohen's κ broken out by `feature_id`,
+not just one pooled number) and **stratified** validation sampling
+(`validation_sample(per_feature=...)`) so a review pass can actually collect enough
+per-feature labels to compute that breakdown. Caught and fixed a real bug while testing:
+`groupby(...).apply(...)` was silently dropping the `feature_id` column under this
+pandas version's grouping-column-exclusion behavior — replaced with an explicit
+per-group sample + `pd.concat`. Verified end-to-end with synthetic labels, then reset
+them so they don't contaminate a real review. **No human labeling has been done** — that
+still requires the project owner or a qualified reviewer; an AI doing it would defeat the
+purpose of an independent second rater.
+
+Generated a submission-ready supplement CSV (`docs/supplement/Table_S1_Variable_Disposition.csv`,
+all 46 rows) from `docs/VARIABLE_DISPOSITION.md` so the disposition table isn't only
+readable as prose.
+
+A large product-pivot request (ASSESS/DIAGNOSE/ACT/SIMULATE/VALIDATE/SHARE
+decision-support layer) arrived immediately after this work and was deliberately
+deferred to a planning pass rather than implemented inline — see `CURRENT_STATUS.md`.
+
+---
+
 ## 2026-08-12 — [Feature] Search-triggered scoring; live homepage/diseases stats
 
 Selecting an unscored disease from the homepage search bar now scores it automatically

@@ -70,15 +70,56 @@ export default function ValidationPage() {
           ) : metrics.error ? (
             <p className="text-sm text-rose">{metrics.error}</p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-4 mb-3">
               <Metric label="Reviewed" value={String(metrics.n)} />
               <Metric label="Accuracy" value={metrics.accuracy?.toFixed(2) ?? "—"} />
               <Metric label="Precision" value={metrics.precision?.toFixed(2) ?? "—"} />
               <Metric label="Recall" value={metrics.recall?.toFixed(2) ?? "—"} />
+              <Metric label="F1" value={metrics.f1?.toFixed(2) ?? "—"} />
               <Metric label="Cohen's κ" value={metrics.cohen_kappa != null ? metrics.cohen_kappa.toFixed(2) : "—"} />
             </div>
           )}
           {metrics.rater_note && <p className="text-xs text-muted italic">{metrics.rater_note}</p>}
+
+          {metrics.by_feature && Object.keys(metrics.by_feature).length > 0 && (
+            <div className="mt-6">
+              <p className="text-sm text-ink/80 mb-2">Per-feature breakdown</p>
+              <div className="border hairline rounded-2xl overflow-auto card-shadow bg-card">
+                <table className="w-full text-sm">
+                  <thead className="bg-paper2/60 text-left">
+                    <tr>
+                      <th className="px-3 py-2 font-medium text-muted">Feature</th>
+                      <th className="px-3 py-2 font-medium text-muted">n</th>
+                      <th className="px-3 py-2 font-medium text-muted">Precision</th>
+                      <th className="px-3 py-2 font-medium text-muted">Recall</th>
+                      <th className="px-3 py-2 font-medium text-muted">F1</th>
+                      <th className="px-3 py-2 font-medium text-muted">TP / FP / FN / TN</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(metrics.by_feature)
+                      .sort(([, a], [, b]) => a.f1 - b.f1)
+                      .map(([fid, m]) => (
+                        <tr key={fid} className="border-t hairline">
+                          <td className="px-3 py-2 font-mono text-xs">{fid}</td>
+                          <td className="px-3 py-2">{m.n}</td>
+                          <td className="px-3 py-2">{m.precision.toFixed(2)}</td>
+                          <td className="px-3 py-2">{m.recall.toFixed(2)}</td>
+                          <td className="px-3 py-2">{m.f1.toFixed(2)}</td>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            {m.tp} / {m.fp} / {m.fn} / {m.tn}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[11px] text-muted mt-2">
+                Sorted worst-F1-first. Small per-feature n is expected with a limited review sample — read as
+                indicative of where the extractor may be weaker, not a stable estimate.
+              </p>
+            </div>
+          )}
         </section>
       )}
 

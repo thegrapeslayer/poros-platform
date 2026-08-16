@@ -77,7 +77,9 @@ try:
     from sklearn.metrics import (
         accuracy_score,
         brier_score_loss,
+        cohen_kappa_score,
         confusion_matrix,
+        f1_score,
         precision_score,
         recall_score,
         roc_auc_score,
@@ -90,6 +92,7 @@ try:
 except Exception:
     calibration_curve = LogisticRegression = accuracy_score = brier_score_loss = None
     confusion_matrix = precision_score = recall_score = roc_auc_score = roc_curve = None
+    cohen_kappa_score = f1_score = None
     LeaveOneOut = StratifiedKFold = cross_val_predict = Pipeline = StandardScaler = None
     SKLEARN_AVAILABLE = False
 
@@ -1976,7 +1979,16 @@ def cohort_counterfactual_analysis(
 # =============================================================================
 
 
-def validation_sample(n: int = 100, seed: int = 42) -> pd.DataFrame:
+def validation_sample(n: int = 100, seed: int = 42, per_feature: int | None = None) -> pd.DataFrame:
+    """Sample of retrieval-successful feature_evidence rows for human QA review.
+
+    Stratified by feature_id (roughly `n` divided across every Type B feature, or an
+    explicit `per_feature` count) rather than uniform-random across all evidence rows.
+    Uniform sampling would let high-volume features dominate the sample and leave
+    low-volume ones with too few labels to compute a meaningful per-feature
+    precision/recall — see extractor_validation_metrics()'s `by_feature` breakdown,
+    which this sampling strategy exists to support.
+    """
     with db_conn() as conn:
         df = pd.read_sql_query(
             """SELECT e.evidence_id,d.canonical_name AS Disease,e.snapshot_date,e.feature_id,e.status,e.confidence,
@@ -1985,9 +1997,16 @@ def validation_sample(n: int = 100, seed: int = 42) -> pd.DataFrame:
                WHERE e.retrieval_success=1""",
             conn,
         )
-    if len(df) <= n:
+    if df.empty:
         return df
-    return df.sample(n=n, random_state=seed)
+    n_features = df["feature_id"].nunique()
+    target = per_feature or max(1, n // max(1, n_features))
+    # Explicit per-group sample + concat rather than groupby(...).apply(...): pandas
+    # 2.2+ can silently drop the grouping column from what's passed to the callback
+    # (the "exclude grouping columns" behavior change), which would strip feature_id
+    # out of the result — this loop sidesteps that entirely.
+    parts = [g.sample(n=min(len(g), target), random_state=seed) for _, g in df.groupby("feature_id")]
+    return pd.concat(parts, ignore_index=True) if parts else df.iloc[0:0]
 
 
 def save_human_validation(evidence_id: int, human_label: str) -> None:
@@ -2027,37 +2046,56 @@ def wipe_type_b_evidence(exclude_version: str) -> int:
     return deleted_evidence + deleted_values
 
 
+def _confusion_metrics(sub: pd.DataFrame) -> dict[str, Any]:
+    machine = (sub["status"] == "CONFIRMED_PRESENT").astype(int)
+    human = (sub["human_label"] == "CONFIRMED_PRESENT").astype(int)
+    tn, fp, fn, tp = confusion_matrix(human, machine, labels=[0, 1]).ravel()
+    # Cohen's kappa, per the original research plan (Section 6): agreement corrected
+    # for chance, not just raw percent agreement. Undefined (None) when one rater has
+    # no variance in a small per-feature slice — not the same as zero agreement.
+    try:
+        kappa = float(cohen_kappa_score(human, machine))
+    except Exception:
+        kappa = None
+    return {
+        "n": len(sub),
+        "accuracy": float(accuracy_score(human, machine)),
+        "precision": float(precision_score(human, machine, zero_division=0)),
+        "recall": float(recall_score(human, machine, zero_division=0)),
+        "f1": float(f1_score(human, machine, zero_division=0)),
+        "specificity": float(tn / (tn + fp)) if (tn + fp) else None,
+        "cohen_kappa": kappa,
+        "tp": int(tp), "tn": int(tn), "fp": int(fp), "fn": int(fn),
+    }
+
+
 def extractor_validation_metrics() -> dict[str, Any]:
+    """Aggregate + per-feature accuracy/precision/recall/F1/specificity/Cohen's kappa
+    of the Type B extractor against whatever human labels have been saved so far. The
+    aggregate figure can hide a feature with poor precision hiding behind others that
+    are doing better — the `by_feature` breakdown is what a manuscript methods section
+    should actually cite per feature, not just the pooled number."""
     with db_conn() as conn:
         df = pd.read_sql_query(
-            "SELECT status,human_label FROM feature_evidence WHERE reviewed=1 AND human_label IS NOT NULL", conn
+            "SELECT feature_id,status,human_label FROM feature_evidence WHERE reviewed=1 AND human_label IS NOT NULL",
+            conn,
         )
     if df.empty:
         return {"n": 0}
     if not SKLEARN_AVAILABLE:
         return {"n": len(df), "error": "scikit-learn is not installed — run: pip install scikit-learn"}
-    machine = (df["status"] == "CONFIRMED_PRESENT").astype(int)
-    human = (df["human_label"] == "CONFIRMED_PRESENT").astype(int)
-    tn, fp, fn, tp = confusion_matrix(human, machine, labels=[0, 1]).ravel()
-    # Cohen's kappa, per the original research plan (Section 6): agreement
-    # corrected for chance, not just raw percent agreement.
-    try:
-        from sklearn.metrics import cohen_kappa_score
-        kappa = float(cohen_kappa_score(human, machine))
-    except Exception:
-        kappa = None
-    return {
-        "n": len(df),
-        "accuracy": float(accuracy_score(human, machine)),
-        "precision": float(precision_score(human, machine, zero_division=0)),
-        "recall": float(recall_score(human, machine, zero_division=0)),
-        "specificity": float(tn / (tn + fp)) if (tn + fp) else None,
-        "cohen_kappa": kappa,
-        "tp": int(tp), "tn": int(tn), "fp": int(fp), "fn": int(fn),
-        "rater_note": "This audit is a repair/QA pass on the extractor, not an independent human "
-                      "second-rater. A formal manuscript inter-rater-reliability claim still requires "
-                      "an independent human reviewer coding the same sample blind to the machine output.",
-    }
+
+    overall = _confusion_metrics(df)
+    overall["by_feature"] = {fid: _confusion_metrics(g) for fid, g in df.groupby("feature_id")}
+    overall["rater_note"] = (
+        "This audit is a repair/QA pass on the extractor, not an independent human "
+        "second-rater. A formal manuscript inter-rater-reliability claim still requires "
+        "an independent human reviewer coding the same sample blind to the machine output. "
+        "Per-feature n is often small — read per-feature precision/recall/F1 as indicative "
+        "of where the extractor may be weaker, not as a stable estimate, until more labels "
+        "are collected for that specific feature."
+    )
+    return overall
 
 
 # =============================================================================

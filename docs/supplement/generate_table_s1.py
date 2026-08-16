@@ -1,0 +1,77 @@
+"""Generates Table_S1_Variable_Disposition.csv from the rubric-vs-implementation audit
+in ../VARIABLE_DISPOSITION.md. Regenerate this (don't hand-edit the CSV) if that
+document's table changes, so the two never drift apart.
+
+Usage: python generate_table_s1.py
+"""
+import csv
+from pathlib import Path
+
+# (rubric_variable, domain, feature_id, status, exclusion_category, rationale,
+#  changes_methods_text, reconsider_before_freeze)
+ROWS = [
+    ("Causal molecular basis established", "Biological", "causal_molecular_basis", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Actionable therapeutic target identified", "Biological", "actionable_target", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Human-relevant disease model available", "Biological", "human_disease_model", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("In vivo disease model available", "Biological", "in_vivo_model", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Phenotypic rescue demonstrated preclinically", "Biological", "preclinical_rescue", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Dominant mechanistic convergence", "Biological", "", "EXCLUDED", "3", "Requires weighing proportion of variants converging on one pathway across the literature base; the paired-regex Type B classifier confirms single co-occurring phrases, not comparative/proportional judgments.", "Yes", "Maybe (human-coded field)"),
+    ("Independent replication of mechanism", "Biological", "", "EXCLUDED", "1;3", "Requires counting independent research groups; no source exposes a reliable group-identity field and a regex classifier cannot disambiguate independent replication from repeated citation.", "Yes", "Maybe (author-affiliation clustering)"),
+    ("Genotype-phenotype predictability", "Biological", "", "EXCLUDED", "3", "Rubric specifies an ordinal (0/50/100) judgment; the Type B pipeline only produces binary CONFIRMED_PRESENT/NOT_CONFIRMED/UNASCERTAINED, with no ordinal grading mechanism.", "Yes", "Yes - best candidate for a dedicated non-regex coding pass"),
+    ("Therapeutic modality precedent", "Biological", "", "EXCLUDED", "4", "Requires cross-disease approval matching by modality (gene therapy, ASO, enzyme replacement, etc.); no integrated source tags approvals by modality.", "Yes", "No - needs a new structured source"),
+    ("Prospective natural-history study", "Clinical", "natural_history_study", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Disease-specific patient registry", "Clinical", "patient_registry", "IMPLEMENTED", "", "Exact 1:1 match. Also stands in for the Infrastructure-domain Formal patient registry item (see MERGED row below).", "No", "No"),
+    ("Validated clinical outcome measure", "Clinical", "validated_outcome_measure", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Biomarker used prospectively in interventional study", "Clinical", "biomarker_in_trial", "IMPLEMENTED", "", "Match, plus a structured-evidence upgrade: force-confirmed directly from ClinicalTrials.gov outcome-measure text in addition to the Type B literature search.", "No (positive deviation)", "No"),
+    ("Completed interventional trials", "Clinical", "completed_by_snapshot", "IMPLEMENTED", "", "Conceptual match (Trials completed by snapshot).", "No", "No"),
+    ("Highest phase reached", "Clinical", "highest_phase_by_snapshot", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Median enrollment of completed trials", "Clinical", "median_enrollment", "IMPLEMENTED (scope differs)", "7", "Rubric specifies of completed trials; implementation computes over all snapshot-eligible trials regardless of completion status.", "Yes", "Yes - narrow to completed-only or document deviation"),
+    ("Recruiting-site breadth", "Clinical", "unique_trial_sites", "IMPLEMENTED (scope differs)", "7", "Rubric specifies active trials; implementation computes over all snapshot-eligible trials, not filtered to active/recruiting.", "Yes", "Yes - same as above"),
+    ("Currently recruiting interventional trials", "Clinical", "", "FUTURE WORK", "2", "Raw value (active_trials_current) is already retrieved for the current snapshot but explicitly None for historical snapshots (cannot reconstruct reliably from current OverallStatus) - unusable for the frozen 2015-12-31 manuscript baseline.", "Yes, live site only", "Yes - live/public site only, not the frozen manuscript cohort"),
+    ("Multinational or multicenter registry", "Clinical", "", "EXCLUDED", "3;7", "Narrower/more specific than plain registry existence (requires >=2 countries or >=3 centers); patient_registry's rule tests only generic registry-existence phrases with no scope detection.", "Yes", "Maybe, if registry scope becomes a manuscript claim"),
+    ("Diagnosed/recruitable patient estimate", "Clinical", "", "EXCLUDED", "4", "No epidemiology/prevalence-estimate API integrated in engine.py. Same underlying gap as Economic's Patient population estimate (rubric-internal duplicate construct across two domain docs).", "Yes", "No - needs a new epidemiology source"),
+    ("Approved therapy for the same disease", "Regulatory", "fda_label_signal", "EXCLUDED (from scoring)", "8", "fda_label_signal is retrieved but scoreable=False by design. Traces directly to the rubric Master Index's own non-negotiable exclusion: No current approval status may be used to predict the same historical approval outcome - approval_label_signal is one of the outcome variables derive_outcome() computes for validation, so scoring it would be predictor/outcome leakage.", "Yes - strongest candidate for an explicit Methods sentence", "No - this exclusion should hold; reconsidering would violate the rubric's own leakage rule"),
+    ("Orphan designation for a therapeutic program", "Regulatory", "orphan_designation_evidence", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Expedited regulatory designation", "Regulatory", "expedited_designation_evidence", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Accepted surrogate or intermediate endpoint", "Regulatory", "surrogate_endpoint_precedent", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Modality precedent", "Regulatory", "", "EXCLUDED", "4", "Same modality-tagging gap as Biological's Therapeutic modality precedent.", "Yes", "No - needs a new source"),
+    ("External-control precedent", "Regulatory", "", "EXCLUDED", "4", "Requires FDA/EMA review-document full text identifying accepted external/natural-history controls; not integrated.", "Yes", "No - needs a new source"),
+    ("Number of formal regulatory approvals", "Regulatory", "", "EXCLUDED", "4;8", "fda_label_signal's raw count is retrieved but is present-day-only and shares the same predictor/outcome leakage concern as Approved therapy for the same disease.", "Yes", "No"),
+    ("Number of publicly documented regulatory interactions or guidance artifacts", "Regulatory", "", "EXCLUDED", "4", "No FDA/EMA guidance-document or advisory-committee-record source integrated.", "Yes", "No - needs a new source"),
+    ("Unique commercial sponsors, last 5 years", "Economic", "industry_sponsors", "IMPLEMENTED (scope differs)", "7", "Commercial correctly maps to sponsor_class==INDUSTRY, but no 5-year recency window is applied, unlike the correctly-windowed NIH funding features.", "Yes", "Yes - add the same 5-year window used for NIH features"),
+    ("Active industry-sponsored interventional trials", "Economic", "industry_trials", "IMPLEMENTED (scope differs)", "7", "Rubric specifies active trials; implementation counts all snapshot-eligible industry-sponsored trials regardless of current status.", "Yes", "Maybe, if active specifically matters"),
+    ("Distinct therapeutic programs in clinical development", "Economic", "", "EXCLUDED", "1", "Requires de-duplicating trials to underlying drug/product identity; ClinicalTrials.gov structured fields don't expose a reliable cohort-wide product identifier.", "Yes", "No - needs a curated product-identity mapping"),
+    ("Program discontinuation burden", "Economic", "", "EXCLUDED", "3", "Requires classifying termination reason (non-safety administrative/business vs. safety); the structured OverallStatus field carries no reason code and this is not a regex-tractable judgment.", "Yes", "No - needs a new structured field or extractor"),
+    ("Recent NIH funding", "Economic", "nih_funding_total", "IMPLEMENTED (normalization differs)", "8", "Correctly 5-year windowed. Rubric specifies log-transform then inverse percentile; implementation applies the empirical-percentile transform directly with no log-transform step first.", "Yes", "Yes - confirm whether log-transform was intentionally dropped"),
+    ("Recent NIH project count", "Economic", "nih_funded_projects", "IMPLEMENTED", "", "Exact 1:1 match, correctly 5-year windowed.", "No", "No"),
+    ("Patient population estimate", "Economic", "", "EXCLUDED", "4", "Same epidemiology-source gap as Clinical's Diagnosed/recruitable patient estimate - a rubric-internal duplicate construct across two domain documents.", "Yes", "No - needs a new epidemiology source"),
+    ("Sponsor concentration (Herfindahl-Hirschman index)", "Economic", "", "FUTURE WORK", "8", "Raw ingredient data (per-sponsor trial counts) is already retrieved; only the HHI transform and a FEATURE_SPECS entry are missing. Lower-effort than most gaps since no new data source is needed.", "Yes, once added", "Yes - good near-term candidate"),
+    ("Disease-specific patient organization", "Infrastructure", "patient_organization", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Formal patient registry", "Infrastructure", "patient_registry (scored under Clinical)", "MERGED", "5", "Rubric specifies this construct independently in both Clinical section 2 and Infrastructure section 2 with near-identical definitions; only one implemented feature exists, scored under Clinical only. Registry evidence is not separately counted toward the Infrastructure domain.", "Yes - Methods must state registry evidence contributes to Clinical only", "Yes - decide whether Infrastructure should also reflect registry presence (risk of double-counting if scored in both)"),
+    ("Biobank or shared biospecimen resource", "Infrastructure", "biobank", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Natural-history consortium", "Infrastructure", "natural_history_consortium", "IMPLEMENTED", "", "Exact 1:1 match.", "No", "No"),
+    ("Multicenter clinical network", "Infrastructure", "multicenter_network", "IMPLEMENTED (threshold not enforced)", "3", "Rubric requires >=3 independent centers; the Type B rule matches on descriptive phrases with no numeric threshold check - a regex classifier cannot reliably count and compare named centers to a threshold.", "Yes - state the >=3-center threshold is not verified", "Maybe, if center-count precision matters to a manuscript claim"),
+    ("Published diagnostic consensus criteria", "Infrastructure", "consensus_guidance", "MERGED", "5", "TYPE_B_RULES['consensus_guidance'] contains phrases for both this item and management/care guidelines in one condition group; a match on either satisfies the same feature. The two rubric items are not distinguished in code.", "Yes - state these two rubric items are represented by one collapsed indicator", "Yes - split into two rules if the diagnostic-vs-management distinction matters"),
+    ("Published management / care guidelines", "Infrastructure", "consensus_guidance", "MERGED", "5", "Same finding as directly above - one feature covers both rubric items.", "(see row above)", "(see row above)"),
+    ("Dedicated expert centers", "Infrastructure", "", "EXCLUDED", "4", "No integrated source enumerates named centers of excellence for a disease.", "Yes", "No - needs a new curated source"),
+    ("Cross-institution publication network", "Infrastructure", "", "EXCLUDED", "4", "Rubric's own preferred source is PubMed metadata / OpenAlex if used; OpenAlex is not integrated anywhere in engine.py, and Europe PMC/PubMed retrieval extracts title/abstract/date only, never author-institution affiliation.", "Yes", "No - needs OpenAlex or an affiliation-extraction step"),
+    ("Industry-academic collaboration", "Infrastructure", "", "FUTURE WORK", "8", "Per-trial sponsor_class is already retrieved, but the full collaboratorsModule (needed to detect mixed academic+industry participation) is not currently pulled from the ClinicalTrials.gov API response - same API, unused field, no new source required.", "Yes, once added", "Yes - good second-priority candidate after sponsor concentration"),
+]
+
+HEADER = [
+    "rubric_variable", "domain", "feature_id", "status", "exclusion_category",
+    "rationale", "changes_methods_text", "reconsider_before_freeze",
+]
+
+
+def main() -> None:
+    out_path = Path(__file__).parent / "Table_S1_Variable_Disposition.csv"
+    with out_path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(HEADER)
+        w.writerows(ROWS)
+    print(f"wrote {len(ROWS)} rows to {out_path}")
+
+
+if __name__ == "__main__":
+    main()

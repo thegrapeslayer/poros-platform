@@ -117,24 +117,21 @@ npm run dev
 ## Current development priorities
 
 See [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) for the full, current list — it's
-kept up to date there rather than duplicated here. As of the last update, the earlier
-round of product fixes (comparison bug, empty states, rebrand, plain-language labels,
-pipeline explainer, diseases/portfolio merge, per-disease scoring, risk-scale clarity) is
-done, and a "Tier 1" pass has shipped a real 100-disease data refresh (100/100 scored,
-0 errors), live version/provenance visibility (`GET /api/provenance`, Data Provenance
-section on `/methodology`), a full code-audited variable disposition reconciliation
-([docs/VARIABLE_DISPOSITION.md](docs/VARIABLE_DISPOSITION.md): 46 specified, 24
-implemented, 3 merged, 16 excluded, 3 future work, 0 unresolved), Validated Cohort
-labeling, and per-feature evidence provenance (source links, dates, extractor version).
-**Top remaining items**: the project owner's sign-off on
-`docs/VARIABLE_DISPOSITION.md` (the MERGED and FUTURE WORK rows are real decisions, not
-just documentation), the Postgres migration on Render (owner has created `poros-db`;
-migration code — SQLAlchemy/psycopg/Alembic refactor of `engine.py`'s direct `sqlite3`
-usage — not yet started, sequenced to happen *after* the scientific freeze per the
-owner's explicit instruction), resolving what changed between extractor v3.0 and v3.1,
-and the Tier-2 roadmap (deeper disease-page depth, portfolio analytics/filters/export, an
-explanatory layer on Compare, a public counterfactual/CTR UI, evidence-completeness
-analysis).
+kept up to date there rather than duplicated here. Product fixes and a "Tier 1" data pass
+are done; since then, a scientific-freeze pass has produced a **real, complete, current
+frozen manuscript dataset** (100/100 diseases, 0 errors, extractor v3.1, archived at
+`../Manuscript Bundle/frozen_2026-08-14_typeB_rules_v3.1_n100/` — this supersedes the old
+v3.0/40-disease bundle and resolves the v3.0-vs-v3.1 question by simply being current)
+and **per-feature extractor-validation metrics + stratified sampling**
+(precision/recall/F1/confusion matrix by `feature_id`, not just pooled — infrastructure
+only, no human labels collected yet). **Top remaining items**: the actual human review
+pass for extractor validation (cannot be done by an AI session without defeating the
+point — needs the project owner or a qualified reviewer), the project owner's sign-off on
+`docs/VARIABLE_DISPOSITION.md`'s MERGED/FUTURE WORK rows, the Postgres migration on
+Render (owner has created `poros-db`; migration code not yet started, deliberately
+sequenced *after* the scientific freeze), and a large pending decision-support product
+pivot (ASSESS/DIAGNOSE/ACT/SIMULATE/VALIDATE/SHARE — see `CURRENT_STATUS.md`) that's
+being scoped as a plan before any implementation, not started inline.
 
 ## Things future Claude sessions must not accidentally change
 

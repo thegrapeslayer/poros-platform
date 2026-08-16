@@ -31,14 +31,21 @@ implemented in `engine.py`:
 5. **Evidence-completeness analyses** — ascertainment completeness and evidence coverage,
    reported *alongside* TRS rather than folded into it, precisely so a reviewer can tell
    "low risk" apart from "we don't have enough evidence to say."
-6. **Validation analyses** — Type B extractor precision/recall/accuracy/specificity and
-   Cohen's κ against human-reviewed labels (`extractor_validation_metrics()`,
-   `engine.py:2017-2047`), exposed at `GET /api/research/extractor-metrics` and the
-   `/research/validation` operator page. The function's own `rater_note` is explicit that
-   this is a repair/QA pass, **not** a formal independent second-rater — a manuscript
-   inter-rater-reliability claim needs an actual independent human reviewer blind to the
-   machine output, which this codebase does not (and structurally cannot) provide on its
-   own.
+6. **Validation analyses** — Type B extractor accuracy/precision/recall/F1/specificity
+   and Cohen's κ against human-reviewed labels, both pooled and **per feature**
+   (`extractor_validation_metrics()` in `engine.py`), exposed at
+   `GET /api/research/extractor-metrics` and the `/research/validation` operator page.
+   The sampling that feeds this (`validation_sample()`) is stratified by `feature_id` (a
+   target row count per feature, not uniform-random across all evidence), so a
+   per-feature breakdown has a real chance of being reportable rather than being starved
+   of labels for low-volume features. **The metrics infrastructure is complete; the
+   actual human labels are not** — as of this pass, `feature_evidence.reviewed=1` rows
+   still need to be produced by a person going through `/research/validation` (or
+   pulling `GET /api/research/validation-sample` and labeling offline), which this
+   codebase cannot do on its own without invalidating the point of the check. The
+   function's own `rater_note` is explicit that this is a repair/QA pass, **not** a
+   formal independent second-rater — a manuscript inter-rater-reliability claim needs an
+   actual independent human reviewer blind to the machine output.
 7. **Counterfactual / CTR (Counterfactual Translation Risk) analyses** —
    [SCORING_METHODOLOGY.md §7](SCORING_METHODOLOGY.md#7-counterfactual-analysis), matching
    `Objective Scoring/06_Counterfactual_Translation_Risk_Scoring.docx`.
@@ -50,30 +57,42 @@ implemented in `engine.py`:
    a provenance copy of the full SQLite database. Reachable via
    `GET /api/research/export` and the `/research/export` page.
 
-## The frozen bundle already in this repo
+## The frozen bundle — current authoritative version
 
-`../Manuscript Bundle/` (one directory above `poros-platform/`) is a **real prior output**
-of this exact pipeline — not a mockup:
+**`../Manuscript Bundle/frozen_2026-08-14_typeB_rules_v3.1_n100/`** (one directory above
+`poros-platform/`) is the **current authoritative frozen manuscript dataset** — generated
+2026-08-14 by running `POST /api/research/pipeline/run` against this machine's real
+outbound internet for the full `DEFAULT_MANUSCRIPT_COHORT` (100 diseases), under the
+extractor and model versions currently in `engine.py`. **100/100 diseases resolved and
+scored, 0 retrieval errors.** Its own `README.txt` documents cohort_id
+(`manuscript_99262879ff`), exact versions, top-line AUCs, and contents; not repeated here.
+Cite *this* bundle going forward, not the older one below.
 
-- `manuscript_dataset.csv` — 40 diseases scored (a subset of the 100-name cohort; not
-  every disease resolved/scored successfully in that run), with domain scores, TRS,
-  ascertainment/coverage, and derived outcomes.
-- `methods_snapshot.txt` — states `Model: TRS_v3_empirical`, `Extractor: typeB_rules_v3.0`,
-  `Cohort ID: manuscript_0076424080`, `Snapshot: 2015-12-31`, `Outcome: Phase3Outcome`.
-- `analysis_results.json`, `univariate_results.csv`, `counterfactual_results.csv` — the
-  statistical outputs described in [SCORING_METHODOLOGY.md §8](SCORING_METHODOLOGY.md#8-outcome-derivation-for-validation-not-for-scoring).
-- `figures/` — the four generated PNGs.
-- `provenance/rdti_evidence_v3.sqlite` — the evidence database as it stood at export time.
+This directly resolves the extractor-version reconciliation issue that was open in
+earlier passes of this document: rather than trying to reconstruct what changed between
+`typeB_rules_v3.0` and `typeB_rules_v3.1` in the old bundle (nothing in the repo recorded
+that), this bundle sidesteps the question by simply being **current and complete** —
+generated under whatever `TYPE_B_RULES`/`FEATURE_SPECS` exist in `engine.py` today, with
+every one of the 100 cohort diseases represented, not a 40-disease subset.
 
-**Open reconciliation issue** (see [CURRENT_STATUS.md](CURRENT_STATUS.md) for the full
-flag): this bundle's extractor version (`typeB_rules_v3.0`) is one version behind the
-`typeB_rules_v3.1` currently in `engine.py`. That means `TYPE_B_RULES` changed after this
-bundle was generated, so re-running the pipeline today would very likely reclassify some
-Type B features differently and produce a numerically different dataset from the one
-already sitting in this repo. Nobody has annotated *what* changed between v3.0 and v3.1
-(no changelog entry exists for it), and this document does not attempt to guess. If the
-manuscript cites numbers from the frozen bundle, they should be treated as tied to
-extractor v3.0 specifically, not to "the current app."
+Reproduction script: `backend/scripts/regenerate_manuscript_bundle.py` — regenerates the
+dataset/analyses/counterfactuals/figures from an already-completed pipeline run's
+`cohort_id`/dates without re-hitting external APIs (useful after installing
+`matplotlib`, which is what triggered this bundle's second, figures-included pass).
+
+**Freezing discipline going forward**: this bundle is a point-in-time export, not a live
+view. If `engine.py`'s scoring math, `TYPE_B_RULES`, or `FEATURE_SPECS` change after this
+date (see [CLAUDE.md](../CLAUDE.md#things-future-claude-sessions-must-not-accidentally-change)
+for why that requires a version bump), this bundle becomes historical too, and a new
+dated bundle should be generated and archived the same way — not overwritten in place.
+
+### Prior bundle — superseded, kept for history
+
+`../Manuscript Bundle/` (no dated suffix) is the **original, now-superseded** bundle:
+40 of the 100 cohort diseases (not every disease resolved/scored successfully in that
+run), generated under `Extractor: typeB_rules_v3.0`, `Cohort ID: manuscript_0076424080`.
+Left in place for audit-trail purposes, not deleted. Do not cite this one going forward —
+use the dated bundle above.
 
 ## The Objective Scoring rubric specifies more than is implemented
 
@@ -114,36 +133,32 @@ domain→composite levels — matching `calculate_score_from_values()`. Not a co
 (the docx permits equal weighting as one valid option) but worth knowing the docx's
 "weighted mean" phrasing doesn't imply fitted weights were used.
 
-## Known data-quality flags in the frozen bundle (for whoever writes Results text)
+## Known data-quality flags in the current frozen bundle (for whoever writes Results text)
 
-Surfaced by direct inspection of `../Manuscript Bundle/`'s CSVs, JSON, and provenance
-sqlite — not resolved here, flagged for the person writing manuscript statistics:
+Re-checked directly against the current `frozen_2026-08-14_typeB_rules_v3.1_n100`
+bundle (not the old 40-disease one — some flags from that bundle no longer apply and are
+noted as resolved below):
 
-- **`AscertainmentCompleteness` is constant (100.0) across all 40 scored diseases** in
-  `manuscript_dataset.csv`. A constant predictor has no variance, which is why its
-  univariate logistic regression (`univariate_results.csv`) has an odds ratio but
-  undefined/blank CI and p-value — it cannot be evaluated as a predictor in this cohort.
-  Do not report a significance test on this variable as-is.
-- **The `Regulatory` domain's univariate odds ratio has no CI or p-value** (`null` in both
-  `univariate_results.csv` and `analysis_results.json`) — consistent with a
-  convergence/separation issue in that specific logistic fit, not explained anywhere in
-  the bundle's own text.
-- **`counterfactual_results.csv` (126 rows, 10 diseases) is a subset**, not a full dump —
-  the provenance sqlite's `counterfactual_runs` table has 133 rows and implicitly covers
-  more of the cohort. No file in the bundle documents the selection criterion for which
-  10 diseases were exported to the CSV. Don't describe the CSV as exhaustive in manuscript
-  text without first confirming the selection logic with whoever generated it.
-- **Provenance sqlite `calculated_at` timestamps read as very recent** (matching this
-  audit's own date), distinct from the historical snapshot date (`2015-12-31`) the actual
-  scores are computed *as of*. This may simply mean the scores were (re)computed recently
-  from historical-cutoff evidence — which is expected and correct — but it's worth
-  explicitly confirming with the project owner before calling this bundle a long-frozen,
-  untouched artifact in manuscript methods language.
-- **`Biological` domain score reads as `0.0` (best possible / lowest risk) for several of
-  the best-characterized diseases** sampled (Cystic Fibrosis, Fabry Disease, Sickle Cell
-  Disease, DMD, SMA, Pompe, Beta Thalassemia, PAH). This is plausibly a genuine floor
-  effect (all qualifying Biological Type B features confirmed present for
-  well-studied diseases) rather than a scoring bug, but it was not independently verified
+- **Resolved**: `AscertainmentCompleteness` was constant (100.0, no variance, undefined
+  CI/p-value) in the old 40-disease bundle. In the current 100-disease bundle it takes
+  two values (96.4, 100.0) and its univariate fit now produces a real (if wide) CI:
+  OR 102.0, 95% CI 0.59–17,574, p=0.078. Still not a significant predictor, but no longer
+  a degenerate/uncomputable one.
+- **Still open**: **`Regulatory`'s univariate odds ratio has no CI or p-value**
+  (blank in `univariate_results.csv`) — same convergence/separation issue as the old
+  bundle, persists in the new run too. Not explained anywhere in the bundle's own text;
+  worth a statistician's look before citing a Regulatory-domain odds ratio.
+- **Resolved / re-characterized**: the old bundle's `counterfactual_results.csv` (126
+  rows, 10 diseases) looked like an unexplained subset. In the current bundle it's 370
+  rows across exactly 25 diseases — **25 = 100 × the documented default
+  `top_fraction=0.25`** (`cohort_counterfactual_analysis()`, top-risk quartile only). This
+  is the documented, intended behavior, not an unexplained selection — safe to describe
+  as "the top translation-risk quartile" in manuscript text.
+- **`Biological` domain score is `0.0` (best possible / lowest risk) for 11 of 100
+  diseases** in the current bundle (was "several of the best-characterized diseases
+  sampled" in the old 40-disease bundle, not independently counted at the time). Plausibly
+  a genuine floor effect (all qualifying Biological Type B features confirmed present for
+  well-studied diseases) rather than a scoring bug, but still not independently verified
   against every row — flagged as unconfirmed, not asserted either way.
 
 ## Do not touch without a version bump

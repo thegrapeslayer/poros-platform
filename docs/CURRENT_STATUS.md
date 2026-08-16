@@ -1,18 +1,29 @@
 # Current Status
 
-Last updated: 2026-08-12, by a Claude Code "Tier 1" pass addressing what's needed before
-POROS is treated as a real public research platform: a real 100-disease data refresh
-(run against this machine's actual outbound internet, not a sandbox), a Data Provenance
-section surfacing live cohort/version/retrieval-date state, a draft variable disposition
-table (docx rubric vs. implemented features), Validated Cohort status labeling, and
-per-feature evidence provenance (source links, retrieval dates, extractor version) on
-disease pages. **Postgres migration and the extractor v3.0→v3.1 "what changed" question
-are explicitly deferred** — the former needs Render account access, the latter needs the
-project owner's own knowledge; see "Planned / not implemented" and "Unresolved" below.
-Builds on two earlier passes: an initial audit/documentation pass, then a product-fix pass
-(comparison bug, empty-state clarity, RDTI→POROS rebrand, "Type A"/"Type B" jargon,
-manuscript pipeline explainer, diseases/portfolio merge, per-disease scoring, risk-scale
-clarity) — see [CHANGELOG.md](CHANGELOG.md) for the full list across all passes.
+Last updated: 2026-08-14, by a Claude Code "scientific freeze" pass: ran and archived a
+real, complete manuscript dataset (100/100 diseases, 0 errors, current extractor v3.1 —
+see [MANUSCRIPT_REQUIREMENTS.md](MANUSCRIPT_REQUIREMENTS.md#the-frozen-bundle--current-authoritative-version)),
+added per-feature extractor-validation metrics (precision/recall/F1/confusion
+matrix/Cohen's κ, not just pooled) and stratified validation sampling so a
+per-feature breakdown is actually reportable, and generated a submission-ready
+variable-disposition supplement CSV. **The human-labeling half of extractor validation
+is still not done** — the metrics/sampling infrastructure is real and tested, but no
+person has gone through `/research/validation` yet; see "Implemented but incomplete"
+below. Builds on a "Tier 1" pass (real 100-disease *current-snapshot* data refresh, Data
+Provenance section, first-draft variable disposition, Validated Cohort labeling,
+per-feature evidence provenance on disease pages) and two earlier passes (initial
+audit/documentation, then a product-fix pass: comparison bug, empty-state clarity,
+RDTI→POROS rebrand, "Type A"/"Type B" jargon, manuscript pipeline explainer,
+diseases/portfolio merge, per-disease scoring, risk-scale clarity) — see
+[CHANGELOG.md](CHANGELOG.md) for the full list across all passes.
+
+**A large product-pivot request (ASSESS/DIAGNOSE/ACT/SIMULATE/VALIDATE/SHARE — a
+decision-support layer on top of the scoring engine) has been received but deliberately
+not started** — it's being scoped as a plan first, per the project owner's own request to
+"show me a concise implementation plan" before changes, and because it's large enough to
+warrant a checkpoint after this scientific-freeze work rather than context-switching
+mid-stream. See the bottom of this file once that plan exists (or ask — it may not have
+landed in this file yet if the plan is still being written in the same conversation).
 
 **Update this file after any meaningful change** — see
 [CLAUDE.md](../CLAUDE.md#keeping-this-documentation-current). Stale status docs are worse
@@ -141,9 +152,44 @@ than no status docs.
   manuscript methods section** — the MERGED and FUTURE WORK rows in particular represent
   real decisions (e.g. whether registry evidence should count toward the Infrastructure
   domain too) that only the owner can make.
+- **Frozen historical manuscript dataset, current version**: `POST
+  /api/research/pipeline/run` was run for real against the full 100-disease cohort at the
+  2015-12-31 baseline (not the current-snapshot refresh from the Tier-1 pass above, which
+  populates a *different* snapshot for the public site) — 100/100 scored, 0 errors,
+  cohort_id `manuscript_99262879ff`, extractor `typeB_rules_v3.1`. Archived to
+  `../Manuscript Bundle/frozen_2026-08-14_typeB_rules_v3.1_n100/` (dated, outside git,
+  matching where the project already keeps large manuscript artifacts) with a README
+  documenting exactly what it is and how to reproduce it
+  (`backend/scripts/regenerate_manuscript_bundle.py`). Full detail:
+  [MANUSCRIPT_REQUIREMENTS.md](MANUSCRIPT_REQUIREMENTS.md#the-frozen-bundle--current-authoritative-version).
+  `matplotlib` was added to `requirements.txt` in the process — it was an optional,
+  silently-degrading dependency (`generate_figures()` returned `[]` without it) that
+  happened to be absent, so the bundle's 4 figures had never actually been generated in
+  this environment until now.
+- **Per-feature extractor validation metrics + stratified sampling**:
+  `extractor_validation_metrics()` now reports accuracy/precision/recall/**F1**/
+  specificity/Cohen's κ **both pooled and broken out per `feature_id`**
+  (`by_feature` in the API response), not just one aggregate number that can hide a
+  weak feature behind strong ones. `validation_sample()` now stratifies by feature
+  (`per_feature` param) instead of uniform-random sampling, so a review pass has a
+  realistic chance of collecting enough labels per feature to compute that breakdown.
+  Caught and fixed a real bug during testing: a `groupby(...).apply(...)` call silently
+  dropped the `feature_id` column from sampled rows under this pandas version's grouping
+  behavior — fixed with an explicit per-group sample + `pd.concat` instead. Verified
+  end-to-end with synthetic labels (aggregate and per-feature numbers both checked by
+  hand), then the synthetic labels were reset so they don't contaminate a real review.
+  **The infrastructure is done; the actual human review is not** — see next section.
 
 ## Implemented but incomplete / broken
 
+- **Extractor validation has no human labels yet**: the metrics/sampling code is real,
+  tested, and correct (see above), but `feature_evidence.reviewed=1` has zero real rows
+  — nobody has gone through `/research/validation` (or pulled
+  `GET /api/research/validation-sample` and labeled offline) against the current
+  evidence. This cannot be done by an AI session without defeating the point of an
+  *independent* human second-rater — it genuinely needs the project owner or a qualified
+  reviewer. This is the single biggest remaining scientific-credibility gap per the
+  project owner's own stated priorities.
 - **Portfolio coverage depends on when you last ran a refresh**: `backend/app/data/`
   doesn't exist until the backend runs once and `POST /api/admin/refresh` (or
   `python seed_demo.py` for 3 offline demo diseases) has populated it — check

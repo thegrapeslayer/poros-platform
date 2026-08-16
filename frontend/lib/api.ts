@@ -265,8 +265,9 @@ export interface ValidationRow {
   human_label: string | null;
 }
 
-export function getValidationSample(n = 75) {
-  return getJSON<{ rows: ValidationRow[]; n: number }>(`/api/research/validation-sample?n=${n}`);
+export function getValidationSample(n = 75, perFeature?: number) {
+  const q = perFeature != null ? `n=${n}&per_feature=${perFeature}` : `n=${n}`;
+  return getJSON<{ rows: ValidationRow[]; n: number }>(`/api/research/validation-sample?${q}`);
 }
 
 export function saveValidationLabel(evidenceId: number, humanLabel: "CONFIRMED_PRESENT" | "NOT_CONFIRMED") {
@@ -277,18 +278,34 @@ export function saveValidationLabel(evidenceId: number, humanLabel: "CONFIRMED_P
   });
 }
 
+export interface FeatureValidationMetrics {
+  n: number;
+  accuracy: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  specificity: number | null;
+  cohen_kappa: number | null;
+  tp: number;
+  tn: number;
+  fp: number;
+  fn: number;
+}
+
 export interface ExtractorMetrics {
   n: number;
   error?: string;
   accuracy?: number;
   precision?: number;
   recall?: number;
+  f1?: number;
   specificity?: number | null;
   cohen_kappa?: number | null;
   tp?: number;
   tn?: number;
   fp?: number;
   fn?: number;
+  by_feature?: Record<string, FeatureValidationMetrics>;
   rater_note?: string;
 }
 

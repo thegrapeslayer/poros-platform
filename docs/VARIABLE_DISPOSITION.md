@@ -4,6 +4,13 @@
 capability analysis of the actual repository, not recovered developer intent. Project
 owner review still required before this is cited as a manuscript decision.**
 
+**Manuscript-ready supplement export**: all 46 rows below (rubric variable, domain,
+`feature_id`, status, exclusion category number, rationale, Methods-text impact,
+reconsider-before-freeze) are also available as a flat, submission-ready CSV at
+[`supplement/Table_S1_Variable_Disposition.csv`](supplement/Table_S1_Variable_Disposition.csv)
+— generated directly from this document, not maintained separately, so the two never
+drift apart. Regenerate it (don't hand-edit the CSV) if this document's table changes.
+
 ## How this document was built, and its limits
 
 Every rationale below was checked against one of three things: (1) which of the four

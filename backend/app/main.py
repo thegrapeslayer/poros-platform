@@ -527,12 +527,16 @@ def research_counterfactual_cohort(outcome: str = "Phase3Outcome", top_fraction:
 
 
 @app.get("/api/research/validation-sample")
-def research_validation_sample(n: int = Query(75, ge=10, le=500)) -> dict[str, Any]:
-    """Random sample of Type B extractor decisions for human QA review.
-    Per the project's own audit: this is an extractor QA pass, not a formal
-    independent second human rater — see the rater_note on the metrics
-    endpoint below."""
-    df = eng.validation_sample(n)
+def research_validation_sample(
+    n: int = Query(75, ge=10, le=500),
+    per_feature: int | None = Query(None, ge=1, le=100, description="Override: sample exactly this many rows per feature instead of splitting n across features."),
+) -> dict[str, Any]:
+    """Sample of Type B extractor decisions for human QA review, stratified across
+    every feature_id so a per-feature precision/recall breakdown is actually possible
+    (see GET /api/research/extractor-metrics). Per the project's own audit: this is an
+    extractor QA pass, not a formal independent second human rater — see the
+    rater_note on the metrics endpoint below."""
+    df = eng.validation_sample(n, per_feature=per_feature)
     return {"rows": df.to_dict(orient="records") if len(df) else [], "n": len(df)}
 
 
