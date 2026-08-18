@@ -9,11 +9,13 @@ retrieval, aggregation, scoring, and provenance functions over HTTP so a
 Next.js frontend (or anything else) can drive them.
 """
 
+import io
 import re
 import traceback
 from typing import Any
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+import pandas as pd
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
@@ -603,6 +605,40 @@ def research_validation_export() -> Response:
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=validation_labels.csv"},
     )
+
+
+@app.post("/api/research/validation-import")
+async def research_validation_import(
+    file: UploadFile = File(...),
+    dry_run: bool = Query(True, description="Default true — always dry-run first to see the classification report before applying."),
+    overwrite_conflicts: bool = Query(False, description="If true, rows that already have a DIFFERENT saved label are overwritten; otherwise they're left untouched and reported as conflicts."),
+) -> dict[str, Any]:
+    """Restore human validation labels from a previously exported validation CSV (see
+    GET /api/research/validation-export for the matching export format) — e.g. after
+    losing application state before running the export. Every row is checked against
+    the CURRENT frozen manuscript validation sample (recomputed fresh, not stored)
+    before being accepted. Only feature_evidence.reviewed/human_label/human_note are
+    ever written, via the same save_human_validation() path a normal label click uses —
+    never diseases, evidence, feature_values, scores, or the cohort/snapshot
+    definition. The raw upload is preserved as an audit artifact under
+    backend/app/data/exports/validation_imports/ regardless of outcome."""
+    raw = await file.read()
+
+    audit_dir = eng.EXPORT_DIR / "validation_imports"
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    stamp = eng.now_iso().replace(":", "-")
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", file.filename or "upload.csv")
+    audit_path = audit_dir / f"{stamp}_{safe_name}"
+    audit_path.write_bytes(raw)
+
+    try:
+        df = pd.read_csv(io.BytesIO(raw))
+    except Exception as exc:
+        return {"ok": False, "error": f"Couldn't parse this file as CSV: {exc}", "audit_copy": str(audit_path)}
+
+    result = eng.import_validation_csv(df, overwrite_conflicts=overwrite_conflicts, dry_run=dry_run)
+    result["audit_copy"] = str(audit_path)
+    return result
 
 
 @app.get("/api/research/extractor-versions/stale")

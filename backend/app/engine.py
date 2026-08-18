@@ -2178,6 +2178,163 @@ def validation_export() -> pd.DataFrame:
         )
 
 
+# =============================================================================
+# Validation label import/restore
+#
+# Restores human_label/human_note for rows already inside the locked manuscript
+# validation sample (manuscript_validation_sample()) from a previously exported CSV —
+# e.g. after losing application state before running the export. This ONLY ever writes
+# feature_evidence.reviewed/human_label/human_note via the same save_human_validation()
+# path a normal UI label-click uses. It never touches diseases, raw_observations,
+# feature_values, scores, or the cohort/snapshot definition, and never re-samples —
+# every row is checked against the CURRENT frozen sample (recomputed deterministically,
+# not stored) before being accepted.
+# =============================================================================
+
+_IMPORT_REQUIRED_COLUMNS = ("evidence_id", "human_label")
+_IMPORT_CROSSCHECK_COLUMNS = {
+    "feature_id": "feature_id",
+    "disease": "Disease",
+    "snapshot_date": "snapshot_date",
+    "machine_status": "status",
+}
+
+
+def _frozen_sample_lookup() -> dict[int, dict[str, Any]]:
+    """evidence_id -> {feature_id, Disease, snapshot_date, status} for every row in the
+    CURRENT locked manuscript validation sample. Deterministic (fixed seed) — this is
+    recomputed on every call, never cached/stored, so an import always checks against
+    the sample as it exists right now, not a stale copy."""
+    rows, _plan = manuscript_validation_sample()
+    if rows.empty:
+        return {}
+    return {
+        int(r["evidence_id"]): {
+            "feature_id": r["feature_id"], "Disease": r["Disease"],
+            "snapshot_date": r["snapshot_date"], "status": r["status"],
+        }
+        for _, r in rows.iterrows()
+    }
+
+
+def import_validation_csv(
+    df: pd.DataFrame, overwrite_conflicts: bool = False, dry_run: bool = True
+) -> dict[str, Any]:
+    """Validate (and optionally apply) a restore of human validation labels from an
+    exported CSV. Every row is classified into exactly one bucket:
+
+      importable    evidence_id is in the current frozen sample, not yet reviewed
+      identical     already reviewed with this exact label (no-op, still counted restored)
+      conflict      already reviewed with a DIFFERENT label — only written if overwrite_conflicts
+      duplicate     evidence_id appears more than once in the CSV — none of its rows written
+      unmatched     evidence_id doesn't exist, or isn't part of the current frozen sample
+      malformed     evidence_id is valid but the CSV's own feature_id/disease/snapshot_date/
+                    machine_status (whichever columns are present) don't match what's
+                    actually on file for it — signals a corrupted or wrong-run export
+      invalid_label human_label isn't CONFIRMED_PRESENT/NOT_CONFIRMED/AMBIGUOUS
+
+    Only `importable`, `identical`, and (if overwrite_conflicts) `conflict` rows are ever
+    written, and only when dry_run=False. Nothing is written on a dry run — the report is
+    the same either way, so a dry run is a reliable preview of what an apply would do.
+    """
+    missing_cols = [c for c in _IMPORT_REQUIRED_COLUMNS if c not in df.columns]
+    if missing_cols:
+        return {
+            "ok": False,
+            "error": f"CSV is missing required column(s): {', '.join(missing_cols)}. "
+                     f"Expected at least: {', '.join(_IMPORT_REQUIRED_COLUMNS)}.",
+        }
+
+    frozen = _frozen_sample_lookup()
+
+    # Existing DB state for every evidence_id in the frozen sample, regardless of
+    # whether this CSV mentions it — needed to detect identical vs. conflict.
+    with db_conn() as conn:
+        existing_rows = conn.execute(
+            "SELECT evidence_id, human_label, human_note FROM feature_evidence WHERE reviewed=1"
+        ).fetchall()
+    existing = {int(r["evidence_id"]): {"human_label": r["human_label"], "human_note": r["human_note"]} for r in existing_rows}
+
+    dup_ids = set(df["evidence_id"][df["evidence_id"].duplicated(keep=False)].tolist())
+
+    buckets: dict[str, list[dict[str, Any]]] = {
+        "importable": [], "identical": [], "conflict": [], "duplicate": [],
+        "unmatched": [], "malformed": [], "invalid_label": [],
+    }
+    to_write: list[tuple[int, str, str | None]] = []
+
+    for _, row in df.iterrows():
+        raw_eid = row.get("evidence_id")
+        label = row.get("human_label")
+        note = row.get("human_note") if "human_note" in df.columns else None
+        note = None if (note is None or (isinstance(note, float) and pd.isna(note))) else str(note)
+        detail = {"evidence_id": raw_eid, "human_label": label}
+
+        try:
+            eid = int(raw_eid)
+        except (TypeError, ValueError):
+            buckets["malformed"].append({**detail, "reason": "evidence_id is not a valid integer."})
+            continue
+
+        if eid in dup_ids:
+            buckets["duplicate"].append({**detail, "reason": "evidence_id appears more than once in this CSV."})
+            continue
+
+        if not isinstance(label, str) or label not in VALID_HUMAN_LABELS:
+            buckets["invalid_label"].append({**detail, "reason": f"human_label must be one of {VALID_HUMAN_LABELS}."})
+            continue
+
+        frozen_row = frozen.get(eid)
+        if frozen_row is None:
+            buckets["unmatched"].append({
+                **detail,
+                "reason": "evidence_id is not part of the current frozen manuscript validation sample "
+                          "(either it doesn't exist, or it's real evidence from a different snapshot/sample).",
+            })
+            continue
+
+        mismatches = []
+        for csv_col, frozen_key in _IMPORT_CROSSCHECK_COLUMNS.items():
+            if csv_col in df.columns:
+                csv_val = row.get(csv_col)
+                if pd.notna(csv_val) and str(csv_val) != str(frozen_row[frozen_key]):
+                    mismatches.append(f"{csv_col}: CSV has '{csv_val}', frozen sample has '{frozen_row[frozen_key]}'")
+        if mismatches:
+            buckets["malformed"].append({**detail, "reason": "; ".join(mismatches)})
+            continue
+
+        prior = existing.get(eid)
+        if prior and prior["human_label"] is not None:
+            if prior["human_label"] == label:
+                buckets["identical"].append(detail)
+                to_write.append((eid, label, note))
+            else:
+                detail["existing_label"] = prior["human_label"]
+                buckets["conflict"].append(detail)
+                if overwrite_conflicts:
+                    to_write.append((eid, label, note))
+        else:
+            buckets["importable"].append(detail)
+            to_write.append((eid, label, note))
+
+    written = 0
+    if not dry_run:
+        for eid, label, note in to_write:
+            save_human_validation(eid, label, note)
+            written += 1
+
+    return {
+        "ok": True,
+        "dry_run": dry_run,
+        "overwrite_conflicts": overwrite_conflicts,
+        "rows_in_csv": len(df),
+        "counts": {k: len(v) for k, v in buckets.items()},
+        "examples": {k: v[:10] for k, v in buckets.items()},
+        "written": written,
+        "would_write": len(to_write) if dry_run else written,
+    }
+
+
 def stale_extractor_versions() -> list[str]:
     """List extractor versions present in feature_evidence other than the
     current EXTRACTOR_VERSION — a signal that the rule set changed since
@@ -2409,9 +2566,17 @@ def export_manuscript_bundle(
         for f in FEATURE_SPECS.values()
     ]).to_csv(fd_path, index=False)
 
+    # Human extractor-validation results, whatever has been labeled so far (possibly
+    # none) — additive to the bundle, never required, never blocks export if empty.
+    val_metrics_path = EXPORT_DIR / "validation_metrics.json"
+    val_metrics_path.write_text(json.dumps(extractor_validation_metrics(), indent=2, default=str), encoding="utf-8")
+    val_labels_path = EXPORT_DIR / "validation_labels.csv"
+    validation_export().to_csv(val_labels_path, index=False)
+
     zip_path = EXPORT_DIR / "RDTI_manuscript_bundle.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-        for p in [dataset_path, analysis_path, cf_path, uni_path, method_path, fd_path, *figs]:
+        for p in [dataset_path, analysis_path, cf_path, uni_path, method_path, fd_path,
+                   val_metrics_path, val_labels_path, *figs]:
             if p.exists():
                 z.write(p, arcname=p.relative_to(EXPORT_DIR))
         # Include a copy of the database as provenance snapshot.

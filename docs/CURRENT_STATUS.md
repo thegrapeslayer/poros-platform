@@ -193,8 +193,19 @@ than no status docs.
   `NOT_CONFIRMED` per feature where both have enough eligible rows, gracefully degraded
   (never fabricated) where one is scarce — 6 of 17 features have a scarce
   `CONFIRMED_PRESENT` class (as low as 2 eligible rows). The "Sampling plan" table on the
-  page shows this exact audit before any row is fetched. But `feature_evidence.reviewed=1`
-  still has zero real rows. Nobody has gone through the actual labeling yet. This cannot
+  page shows this exact audit before any row is fetched. A CSV import/restore path also
+  now exists (`POST /api/research/validation-import`, "Restore from CSV" on the same
+  page) specifically so losing application state mid-review isn't catastrophic — matches
+  on `evidence_id` against the *current* frozen sample, always dry-runs first, never
+  silently overwrites a conflicting existing label, and preserves every uploaded file as
+  an audit artifact. Verified with 14 scenarios (fresh restore, idempotent re-import,
+  conflict detection with and without overwrite, malformed/unmatched/duplicate/
+  invalid-label rejection, missing-column rejection) against a real exported CSV — all
+  passed, and the frozen bundle archive's checksums were confirmed unchanged afterward.
+  `export_manuscript_bundle()` now also includes `validation_metrics.json` and
+  `validation_labels.csv` automatically, whatever's been reviewed at export time. But
+  `feature_evidence.reviewed=1` still has zero real rows. Nobody has gone through the
+  actual labeling yet. This cannot
   be done by an AI session without defeating the point of an *independent* human
   second-rater — it genuinely needs the project owner or a qualified reviewer. This is
   the single biggest remaining scientific-credibility gap per the project owner's own

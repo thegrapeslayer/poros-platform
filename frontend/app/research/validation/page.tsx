@@ -7,14 +7,26 @@ import {
   getManuscriptValidationPlan,
   getManuscriptValidationSample,
   getStaleExtractorVersions,
+  importValidationCsv,
   saveValidationLabel,
   validationExportUrl,
   wipeStaleExtractorVersions,
   type ExtractorMetrics,
   type HumanLabel,
   type ManuscriptValidationPlan,
+  type ValidationImportResult,
   type ValidationRow,
 } from "@/lib/api";
+
+const IMPORT_BUCKET_LABELS: Record<string, string> = {
+  importable: "New — will be restored",
+  identical: "Already matches saved label — no-op",
+  conflict: "Conflicts with a different saved label",
+  duplicate: "Duplicate evidence_id within this CSV",
+  unmatched: "Not part of the current frozen sample",
+  malformed: "Doesn't match the frozen sample's own data",
+  invalid_label: "Invalid human_label value",
+};
 
 const LABELS: { value: HumanLabel; label: string; hint: string }[] = [
   { value: "CONFIRMED_PRESENT", label: "Confirm present", hint: "Evidence genuinely supports this feature." },
@@ -39,9 +51,50 @@ export default function ValidationPage() {
   const [draftNote, setDraftNote] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importResult, setImportResult] = useState<ValidationImportResult | null>(null);
+  const [importOverwrite, setImportOverwrite] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importApplied, setImportApplied] = useState(false);
+
   function refreshMetrics() {
     getExtractorMetrics().then(setMetrics).catch((e) => setMetricsError(e instanceof Error ? e.message : "Couldn't reach the API."));
     getStaleExtractorVersions().then(setStale).catch(() => null);
+  }
+
+  function onImportFileChange(f: File | null) {
+    setImportFile(f);
+    setImportResult(null);
+    setImportApplied(false);
+  }
+
+  async function runImportDryRun() {
+    if (!importFile) return;
+    setImportBusy(true);
+    try {
+      const result = await importValidationCsv(importFile, true, importOverwrite);
+      setImportResult(result);
+      setImportApplied(false);
+    } catch (e) {
+      setImportResult({ ok: false, error: e instanceof Error ? e.message : "Couldn't validate this file." });
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function applyImport() {
+    if (!importFile) return;
+    setImportBusy(true);
+    try {
+      const result = await importValidationCsv(importFile, false, importOverwrite);
+      setImportResult(result);
+      setImportApplied(true);
+      refreshMetrics();
+    } catch (e) {
+      setImportResult({ ok: false, error: e instanceof Error ? e.message : "Couldn't apply this import." });
+    } finally {
+      setImportBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -196,6 +249,116 @@ export default function ValidationPage() {
           )}
         </section>
       )}
+
+      <section className="mb-10">
+        <h2 className="font-display text-lg text-ink mb-1">Restore from CSV</h2>
+        <p className="text-sm text-muted mb-4 max-w-2xl">
+          Import a previously exported validation CSV (matching the export above) — e.g. after losing
+          application state before downloading the bundle. Every row is checked against the current frozen
+          sample before anything is written; nothing outside these labels is ever touched. Always validates
+          first — nothing is saved until you click Apply.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(e) => onImportFileChange(e.target.files?.[0] ?? null)}
+            className="text-sm"
+          />
+          <button
+            onClick={runImportDryRun}
+            disabled={!importFile || importBusy}
+            className="rounded-full border hairline px-4 py-2 text-sm font-medium disabled:opacity-40 hover:bg-sage-soft/50"
+          >
+            {importBusy ? "Working…" : "Validate (dry run)"}
+          </button>
+        </div>
+
+        {importResult && !importResult.ok && (
+          <div className="border hairline rounded-xl bg-rose-soft/60 p-4 text-sm text-ink/80 mb-4">
+            {importResult.error || "Import failed."}
+          </div>
+        )}
+
+        {importResult && importResult.ok && importResult.counts && (
+          <div className="border hairline rounded-2xl bg-card card-shadow p-5 mb-4">
+            <p className="text-sm text-ink/80 mb-3">
+              {importResult.rows_in_csv} row(s) in file
+              {importApplied ? (
+                <span className="text-sage-dark font-medium"> · {importResult.written} written to the database.</span>
+              ) : (
+                <span> · {importResult.would_write} would be written if applied.</span>
+              )}
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+              {Object.entries(importResult.counts)
+                .filter(([, n]) => n > 0)
+                .map(([bucket, n]) => (
+                  <div key={bucket} className="border hairline rounded-xl p-3 bg-paper">
+                    <div className="font-display text-xl text-ink">{n}</div>
+                    <div className="text-[11px] text-muted mt-1">{IMPORT_BUCKET_LABELS[bucket] || bucket}</div>
+                  </div>
+                ))}
+            </div>
+
+            {(importResult.counts.malformed > 0 ||
+              importResult.counts.unmatched > 0 ||
+              importResult.counts.duplicate > 0 ||
+              importResult.counts.invalid_label > 0) && (
+              <details className="text-xs text-rose mb-3">
+                <summary className="cursor-pointer">Rows that will NOT be imported — details</summary>
+                <div className="mt-2 space-y-1 max-h-56 overflow-auto">
+                  {(["malformed", "unmatched", "duplicate", "invalid_label"] as const).map((bucket) =>
+                    (importResult.examples?.[bucket] || []).map((ex, i) => (
+                      <p key={`${bucket}-${i}`} className="font-mono">
+                        [{bucket}] evidence_id={ex.evidence_id}: {ex.reason}
+                      </p>
+                    ))
+                  )}
+                </div>
+              </details>
+            )}
+
+            {importResult.counts.conflict > 0 && (
+              <div className="border hairline rounded-xl bg-gold-soft/50 p-3 mb-3">
+                <p className="text-xs text-ink/80 mb-2">
+                  {importResult.counts.conflict} row(s) already have a <em>different</em> saved label than this
+                  CSV. They will be left untouched unless you check this box:
+                </p>
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={importOverwrite}
+                    onChange={(e) => {
+                      setImportOverwrite(e.target.checked);
+                      setImportResult(null);
+                    }}
+                  />
+                  Overwrite conflicting labels with this CSV&rsquo;s values
+                </label>
+                {importOverwrite && (
+                  <p className="text-[11px] text-muted mt-2">Re-run &ldquo;Validate (dry run)&rdquo; to confirm before applying.</p>
+                )}
+              </div>
+            )}
+
+            {!importApplied && (
+              <button
+                onClick={applyImport}
+                disabled={importBusy || importResult.would_write === 0}
+                className="rounded-full bg-sage-dark text-white px-5 py-2 text-sm font-medium disabled:opacity-40 hover:bg-sage"
+              >
+                {importBusy ? "Applying…" : `Apply — write ${importResult.would_write} label(s)`}
+              </button>
+            )}
+            {importApplied && <p className="text-sm text-sage-dark font-medium">Applied. Metrics above are up to date.</p>}
+            {importResult.audit_copy && (
+              <p className="text-[11px] text-muted mt-3">Original upload preserved as an audit artifact on the server.</p>
+            )}
+          </div>
+        )}
+      </section>
 
       {stale && stale.stale_versions.length > 0 && (
         <section className="mb-10 border hairline rounded-2xl bg-gold-soft/40 p-5">

@@ -15,6 +15,44 @@ Format: newest first. `[Type]` one of `Docs`, `Fix`, `Feature`, `Rebrand`, `Data
 
 ---
 
+## 2026-08-18 — [Feature] CSV import/restore for completed validation labels
+
+Added a way to recover human validation labels from a previously exported CSV — e.g.
+after losing application state before running the export. New `engine.py` functions
+(`import_validation_csv()`, `_frozen_sample_lookup()`) match each CSV row on its own
+`evidence_id` against the **current** frozen manuscript validation sample (recomputed
+fresh on every call, never cached), classify it into exactly one bucket (`importable`,
+`identical`, `conflict`, `duplicate`, `unmatched`, `malformed`, `invalid_label`), and
+only write on an explicit second call (`dry_run=false`) — a dry run never touches the
+database. A row whose evidence_id already has a *different* saved label is a `conflict`
+and is left alone unless `overwrite_conflicts=true` is explicitly passed — nothing is
+silently overwritten either way. New endpoint `POST /api/research/validation-import`
+(multipart file upload; added `python-multipart` to `requirements.txt`); every upload,
+accepted or rejected, is preserved verbatim under
+`backend/app/data/exports/validation_imports/` as an audit artifact. `/research/validation`
+got a new "Restore from CSV" section: file picker, dry-run report with per-bucket counts
+and example rows, an explicit overwrite-conflicts checkbox, and an Apply step.
+
+Also extended `export_manuscript_bundle()` to include `validation_metrics.json` and
+`validation_labels.csv` automatically (whatever's been reviewed at export time, possibly
+nothing) — purely additive, no existing bundle file changed.
+
+Verified with 14 scripted scenarios against a real exported CSV (not synthetic data):
+fresh restore, metrics recompute correctly from the restored labels, idempotent
+re-import, conflict detection both blocked and (with the flag) applied, malformed
+(feature_id mismatch), unmatched (nonexistent evidence_id), duplicate evidence_id,
+invalid label value, and missing required column — all 14 passed. Confirmed the frozen
+bundle archive's SHA-256 checksums were unchanged after all of this (regenerating the
+live export dir does not touch the archived, dated bundle). Test data and audit-artifact
+files from this verification pass were cleaned up afterward; `feature_evidence.reviewed`
+was confirmed back at 0 before finishing.
+
+No extraction, scoring, frozen evidence, or cohort logic touched — this only ever writes
+to `feature_evidence.reviewed`/`human_label`/`human_note`, via the same
+`save_human_validation()` path a normal UI label click already used.
+
+---
+
 ## 2026-08-16 — [Methodology] Locked, class-balanced manuscript validation sample
 
 Before any labeling started, audited eligible-example counts per feature and found the

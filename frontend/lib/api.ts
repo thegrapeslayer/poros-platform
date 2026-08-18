@@ -328,6 +328,40 @@ export function validationExportUrl() {
   return `${API_BASE}/api/research/validation-export`;
 }
 
+export interface ValidationImportRowExample {
+  evidence_id: number | string;
+  human_label?: string;
+  reason?: string;
+  existing_label?: string;
+}
+
+export interface ValidationImportResult {
+  ok: boolean;
+  error?: string;
+  dry_run?: boolean;
+  overwrite_conflicts?: boolean;
+  rows_in_csv?: number;
+  counts?: Record<string, number>;
+  examples?: Record<string, ValidationImportRowExample[]>;
+  written?: number;
+  would_write?: number;
+  audit_copy?: string;
+}
+
+// Restore human validation labels from a previously exported CSV (matching
+// validationExportUrl()'s format) — e.g. after losing application state before
+// exporting. Always dry-run first (the default) to see the classification report;
+// nothing is written until called again with dryRun=false. Every row is checked
+// against the current frozen manuscript validation sample server-side.
+export function importValidationCsv(file: File, dryRun: boolean, overwriteConflicts: boolean) {
+  const form = new FormData();
+  form.append("file", file);
+  return getJSON<ValidationImportResult>(
+    `/api/research/validation-import?dry_run=${dryRun}&overwrite_conflicts=${overwriteConflicts}`,
+    { method: "POST", body: form }
+  );
+}
+
 export interface FeatureValidationMetrics {
   n: number;
   accuracy: number;
