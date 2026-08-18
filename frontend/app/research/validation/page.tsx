@@ -4,23 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import ResearchNav from "@/components/ResearchNav";
 import {
   getExtractorMetrics,
+  getManuscriptValidationPlan,
+  getManuscriptValidationSample,
   getStaleExtractorVersions,
-  getValidationSample,
   saveValidationLabel,
   validationExportUrl,
   wipeStaleExtractorVersions,
   type ExtractorMetrics,
   type HumanLabel,
+  type ManuscriptValidationPlan,
   type ValidationRow,
 } from "@/lib/api";
-
-// Recommended default: ~20 labeled rows per Type B feature (17 features -> ~340 total)
-// is enough to compute a per-feature precision/recall/F1 that isn't dominated by noise
-// from a handful of examples; 10/feature (~170 total) is a workable first pass if time
-// is limited. Either way the sample is stratified by feature_id server-side, and
-// deterministic for a fixed target — reloading with the same number reproduces the
-// same queue, so resuming later never redraws different rows.
-const RECOMMENDED_PER_FEATURE = 20;
 
 const LABELS: { value: HumanLabel; label: string; hint: string }[] = [
   { value: "CONFIRMED_PRESENT", label: "Confirm present", hint: "Evidence genuinely supports this feature." },
@@ -33,7 +27,9 @@ export default function ValidationPage() {
   const [stale, setStale] = useState<{ stale_versions: string[]; current_version: string } | null>(null);
   const [metricsError, setMetricsError] = useState<string | null>(null);
 
-  const [perFeature, setPerFeature] = useState(RECOMMENDED_PER_FEATURE);
+  const [plan, setPlan] = useState<ManuscriptValidationPlan | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+
   const [queue, setQueue] = useState<ValidationRow[] | null>(null);
   const [index, setIndex] = useState(0);
   const [queueError, setQueueError] = useState<string | null>(null);
@@ -48,20 +44,23 @@ export default function ValidationPage() {
     getStaleExtractorVersions().then(setStale).catch(() => null);
   }
 
-  useEffect(refreshMetrics, []);
+  useEffect(() => {
+    refreshMetrics();
+    getManuscriptValidationPlan()
+      .then(setPlan)
+      .catch((e) => setPlanError(e instanceof Error ? e.message : "Couldn't reach the API."));
+  }, []);
 
   async function loadQueue() {
     setLoadingQueue(true);
     setQueueError(null);
     try {
-      // n is ignored server-side whenever per_feature is set (validation_sample()
-      // uses per_feature as the stratification target directly) — pass the API's max
-      // so it's never the binding constraint regardless of per_feature's value.
-      const data = await getValidationSample(500, perFeature);
+      const data = await getManuscriptValidationSample();
+      setPlan(data.plan);
       setQueue(data.rows);
       setIndex(0);
     } catch (e) {
-      setQueueError(e instanceof Error ? e.message : "Couldn't load a review queue.");
+      setQueueError(e instanceof Error ? e.message : "Couldn't load the validation sample.");
     } finally {
       setLoadingQueue(false);
     }
@@ -101,11 +100,29 @@ export default function ValidationPage() {
     <div className="max-w-5xl mx-auto px-6 py-16">
       <p className="eyebrow text-muted mb-2">Research</p>
       <h1 className="font-display text-3xl text-ink mb-3">Extractor validation</h1>
-      <p className="text-ink/70 leading-relaxed mb-8 max-w-2xl">
+      <p className="text-ink/70 leading-relaxed mb-4 max-w-2xl">
         Manual review of Type B extractor decisions. This is the human-labeling step needed before
         precision/recall/F1/Cohen&rsquo;s κ can be treated as a real validation result rather than an untested
         pipeline — see the rater_note below the metrics.
       </p>
+
+      {plan && (
+        <div className="border hairline rounded-2xl bg-sage-soft/40 p-5 mb-8 max-w-2xl">
+          <p className="font-display text-lg text-ink mb-1">Historical manuscript validation</p>
+          <p className="text-sm text-ink/80">
+            {plan.per_feature_target} records/feature · {plan.total_target} target reviews · Extractor:{" "}
+            <span className="font-mono">{plan.extractor_version}</span> · Snapshot:{" "}
+            <span className="font-mono">{plan.snapshot_date}</span>
+          </p>
+          <p className="text-xs text-muted mt-2">
+            This is the only sample used here — drawn from the exact evidence the frozen 100-disease dataset&rsquo;s
+            scores are built from, class-balanced ({plan.per_class_target}/{plan.per_class_target} CONFIRMED_PRESENT
+            / NOT_CONFIRMED) where both classes have enough eligible rows, gracefully degraded where one is scarce.
+            Fixed and deterministic — not reconfigurable from this page.
+          </p>
+        </div>
+      )}
+
       <ResearchNav />
 
       {metricsError && <div className="border hairline rounded-xl bg-gold-soft/60 p-4 text-sm text-ink/80 mb-8">{metricsError}</div>}
@@ -114,7 +131,7 @@ export default function ValidationPage() {
         <section className="mb-10">
           <h2 className="font-display text-lg text-ink mb-3">Extractor performance</h2>
           {metrics.n === 0 ? (
-            <p className="text-sm text-muted">No human labels saved yet — load a queue below and start labeling.</p>
+            <p className="text-sm text-muted">No human labels saved yet — load the sample below and start labeling.</p>
           ) : metrics.error ? (
             <p className="text-sm text-rose">{metrics.error}</p>
           ) : (
@@ -173,10 +190,7 @@ export default function ValidationPage() {
           )}
 
           {metrics.n > 0 && (
-            <a
-              href={validationExportUrl()}
-              className="inline-block mt-4 text-sm text-sage-dark hover:underline"
-            >
+            <a href={validationExportUrl()} className="inline-block mt-4 text-sm text-sage-dark hover:underline">
               Export completed validation labels (CSV) &rarr;
             </a>
           )}
@@ -204,130 +218,160 @@ export default function ValidationPage() {
       )}
 
       <section className="mb-10">
-        <h2 className="font-display text-lg text-ink mb-1">Label evidence</h2>
-        <p className="text-sm text-muted mb-4">
-          Recommended: {RECOMMENDED_PER_FEATURE} per feature (~340 total across 17 Type B features) for a stable
-          per-feature breakdown; 10/feature (~170) is a workable first pass. The queue is stratified and
-          deterministic for a given target — reloading later with the same number resumes at the same rows,
-          already-labeled ones included, so nothing is redrawn or duplicated.
-        </p>
-
-        <div className="flex items-end gap-3 mb-6">
-          <label className="text-sm">
-            <span className="block text-muted mb-1">Target per feature</span>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={perFeature}
-              onChange={(e) => setPerFeature(Number(e.target.value))}
-              className="w-24 border hairline rounded-lg px-2 py-1.5 bg-paper text-sm"
-            />
-          </label>
-          <button
-            onClick={loadQueue}
-            disabled={loadingQueue}
-            className="rounded-full bg-sage-dark text-white px-5 py-2 text-sm font-medium disabled:opacity-40 hover:bg-sage"
-          >
-            {loadingQueue ? "Loading…" : queue ? "Reload queue" : "Load queue"}
-          </button>
-        </div>
-
-        {queueError && <div className="border hairline rounded-xl bg-gold-soft/60 p-4 text-sm text-ink/80 mb-6">{queueError}</div>}
-
-        {queue && queue.length === 0 && <p className="text-sm text-muted">No Type B evidence yet — run the pipeline from the Overview tab.</p>}
-
-        {current && (
-          <div className="border hairline rounded-2xl bg-card card-shadow p-6">
-            <div className="flex items-center justify-between mb-4 text-xs text-muted">
-              <span>
-                Item {index + 1} of {queue!.length} · {unreviewedCount} still need a label
-              </span>
-              {current.reviewed === 1 && <span className="text-sage-dark font-medium">Already labeled — editing</span>}
+        <h2 className="font-display text-lg text-ink mb-3">Sampling plan</h2>
+        {planError && <div className="border hairline rounded-xl bg-gold-soft/60 p-4 text-sm text-ink/80 mb-6">{planError}</div>}
+        {plan && (
+          <>
+            <div className="border hairline rounded-2xl overflow-auto card-shadow bg-card mb-3">
+              <table className="w-full text-sm">
+                <thead className="bg-paper2/60 text-left">
+                  <tr>
+                    <th className="px-3 py-2 font-medium text-muted">Feature</th>
+                    <th className="px-3 py-2 font-medium text-muted">Eligible CONFIRMED_PRESENT</th>
+                    <th className="px-3 py-2 font-medium text-muted">Eligible NOT_CONFIRMED</th>
+                    <th className="px-3 py-2 font-medium text-muted">Sampled CP</th>
+                    <th className="px-3 py-2 font-medium text-muted">Sampled NC</th>
+                    <th className="px-3 py-2 font-medium text-muted">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {plan.features.map((f) => (
+                    <tr key={f.feature_id} className="border-t hairline align-top">
+                      <td className="px-3 py-2 font-mono text-xs">{f.feature_id}</td>
+                      <td className="px-3 py-2">{f.eligible_confirmed_present}</td>
+                      <td className="px-3 py-2">{f.eligible_not_confirmed}</td>
+                      <td className="px-3 py-2">{f.sampled_confirmed_present}</td>
+                      <td className="px-3 py-2">{f.sampled_not_confirmed}</td>
+                      <td className="px-3 py-2">
+                        {f.sampled_total}
+                        {f.limitation && <p className="text-[11px] text-gold mt-1 max-w-xs">{f.limitation}</p>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t hairline font-medium">
+                    <td className="px-3 py-2">Total</td>
+                    <td className="px-3 py-2" colSpan={3}></td>
+                    <td className="px-3 py-2"></td>
+                    <td className="px-3 py-2">{plan.total_proposed}</td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
-
-            <div className="flex items-start justify-between gap-4 mb-3">
-              <div>
-                <p className="font-mono text-xs text-muted">{current.Disease}</p>
-                <h3 className="font-display text-lg text-ink">{current.feature_label}</h3>
-                <p className="text-xs text-muted mt-1">{current.feature_description}</p>
-              </div>
-              <span className="text-xs font-mono text-sage-dark whitespace-nowrap">extractor: {current.status}</span>
-            </div>
-
-            <div className="border hairline rounded-xl bg-paper p-4 mb-4">
-              <p className="text-sm text-ink/80">
-                {current.supporting_snippet || <span className="text-muted italic">No supporting snippet available.</span>}
-              </p>
-            </div>
-
-            <div className="text-xs text-muted mb-4 space-y-1">
-              {current.source_title && <p>Source: {current.source_title}</p>}
-              <p className="flex flex-wrap gap-3">
-                {current.source_url && (
-                  <a href={current.source_url} target="_blank" rel="noreferrer" className="text-sage-dark hover:underline">
-                    Open source &rarr;
-                  </a>
-                )}
-                {current.pmid && <span className="font-mono">PMID:{current.pmid}</span>}
-                {current.pmcid && <span className="font-mono">{current.pmcid}</span>}
-                {current.doi && <span className="font-mono">doi:{current.doi}</span>}
-                {current.extractor_version && <span className="font-mono">extractor {current.extractor_version}</span>}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2 mb-4">
-              {LABELS.map((l) => (
-                <button
-                  key={l.value}
-                  title={l.hint}
-                  onClick={() => setDraftLabel(l.value)}
-                  className={`text-xs px-3 py-1.5 rounded-full border hairline transition-colors ${
-                    draftLabel === l.value ? "bg-sage text-white border-sage" : "bg-card hover:bg-sage-soft/50"
-                  }`}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
-
-            <textarea
-              value={draftNote}
-              onChange={(e) => setDraftNote(e.target.value)}
-              placeholder="Optional note (e.g. why this was ambiguous)…"
-              rows={2}
-              className="w-full border hairline rounded-lg px-3 py-2 text-sm bg-paper mb-4"
-            />
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => goTo(index - 1)}
-                disabled={index === 0}
-                className="text-sm px-4 py-2 rounded-full border hairline disabled:opacity-40"
-              >
-                &larr; Back
-              </button>
-              <button
-                onClick={() => goTo(index + 1)}
-                disabled={index >= queue!.length - 1}
-                className="text-sm px-4 py-2 rounded-full border hairline disabled:opacity-40"
-              >
-                Skip &rarr;
-              </button>
-              <button
-                onClick={saveAndAdvance}
-                disabled={!draftLabel || saving}
-                className="ml-auto text-sm px-5 py-2 rounded-full bg-sage-dark text-white font-medium disabled:opacity-40 hover:bg-sage"
-              >
-                {saving ? "Saving…" : "Save & Next"}
-              </button>
-            </div>
-          </div>
+            <p className="text-xs text-muted mb-6">
+              {plan.features.filter((f) => f.limitation).length} of {plan.features.length} features have a scarce
+              class — all eligible rows of that class are used, never duplicated or fabricated; the shortfall is
+              filled from the other class so every feature still reaches {plan.per_feature_target} total.
+            </p>
+          </>
         )}
 
-        {queue && queue.length > 0 && (
+        <button
+          onClick={loadQueue}
+          disabled={loadingQueue}
+          className="rounded-full bg-sage-dark text-white px-5 py-2 text-sm font-medium disabled:opacity-40 hover:bg-sage"
+        >
+          {loadingQueue ? "Loading…" : queue ? "Reload sample" : "Start / resume labeling"}
+        </button>
+
+        {queueError && <div className="border hairline rounded-xl bg-gold-soft/60 p-4 text-sm text-ink/80 mt-4">{queueError}</div>}
+      </section>
+
+      {queue && queue.length > 0 && (
+        <section className="mb-10">
+          <h2 className="font-display text-lg text-ink mb-3">Label evidence</h2>
+
+          {current && (
+            <div className="border hairline rounded-2xl bg-card card-shadow p-6">
+              <div className="flex items-center justify-between mb-4 text-xs text-muted">
+                <span>
+                  Item {index + 1} of {queue.length} · {unreviewedCount} still need a label
+                </span>
+                {current.reviewed === 1 && <span className="text-sage-dark font-medium">Already labeled — editing</span>}
+              </div>
+
+              <div className="flex items-start justify-between gap-4 mb-3">
+                <div>
+                  <p className="font-mono text-xs text-muted">{current.Disease}</p>
+                  <h3 className="font-display text-lg text-ink">{current.feature_label}</h3>
+                  <p className="text-xs text-muted mt-1">{current.feature_description}</p>
+                </div>
+                <span className="text-xs font-mono text-sage-dark whitespace-nowrap">extractor: {current.status}</span>
+              </div>
+
+              <div className="border hairline rounded-xl bg-paper p-4 mb-4">
+                <p className="text-sm text-ink/80">
+                  {current.supporting_snippet || <span className="text-muted italic">No supporting snippet available.</span>}
+                </p>
+              </div>
+
+              <div className="text-xs text-muted mb-4 space-y-1">
+                {current.source_title && <p>Source: {current.source_title}</p>}
+                <p className="flex flex-wrap gap-3">
+                  {current.source_url && (
+                    <a href={current.source_url} target="_blank" rel="noreferrer" className="text-sage-dark hover:underline">
+                      Open source &rarr;
+                    </a>
+                  )}
+                  {current.pmid && <span className="font-mono">PMID:{current.pmid}</span>}
+                  {current.pmcid && <span className="font-mono">{current.pmcid}</span>}
+                  {current.doi && <span className="font-mono">doi:{current.doi}</span>}
+                  {current.extractor_version && <span className="font-mono">extractor {current.extractor_version}</span>}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2 mb-4">
+                {LABELS.map((l) => (
+                  <button
+                    key={l.value}
+                    title={l.hint}
+                    onClick={() => setDraftLabel(l.value)}
+                    className={`text-xs px-3 py-1.5 rounded-full border hairline transition-colors ${
+                      draftLabel === l.value ? "bg-sage text-white border-sage" : "bg-card hover:bg-sage-soft/50"
+                    }`}
+                  >
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                value={draftNote}
+                onChange={(e) => setDraftNote(e.target.value)}
+                placeholder="Optional note (e.g. why this was ambiguous)…"
+                rows={2}
+                className="w-full border hairline rounded-lg px-3 py-2 text-sm bg-paper mb-4"
+              />
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => goTo(index - 1)}
+                  disabled={index === 0}
+                  className="text-sm px-4 py-2 rounded-full border hairline disabled:opacity-40"
+                >
+                  &larr; Back
+                </button>
+                <button
+                  onClick={() => goTo(index + 1)}
+                  disabled={index >= queue.length - 1}
+                  className="text-sm px-4 py-2 rounded-full border hairline disabled:opacity-40"
+                >
+                  Skip &rarr;
+                </button>
+                <button
+                  onClick={saveAndAdvance}
+                  disabled={!draftLabel || saving}
+                  className="ml-auto text-sm px-5 py-2 rounded-full bg-sage-dark text-white font-medium disabled:opacity-40 hover:bg-sage"
+                >
+                  {saving ? "Saving…" : "Save & Next"}
+                </button>
+              </div>
+            </div>
+          )}
+
           <details className="text-sm mt-6">
-            <summary className="cursor-pointer text-muted">Jump to an item ({queue.length} in queue)</summary>
+            <summary className="cursor-pointer text-muted">Jump to an item ({queue.length} in sample)</summary>
             <div className="mt-3 max-h-80 overflow-auto space-y-1">
               {queue.map((r, i) => (
                 <button
@@ -338,15 +382,17 @@ export default function ValidationPage() {
                   }`}
                 >
                   <span className="font-mono text-muted">
-                    {r.Disease} · {r.feature_id}
+                    {r.Disease} · {r.feature_id} · {r.status}
                   </span>
                   <span>{r.reviewed ? <span className="text-sage-dark font-mono">{r.human_label}</span> : <span className="text-muted">unlabeled</span>}</span>
                 </button>
               ))}
             </div>
           </details>
-        )}
-      </section>
+        </section>
+      )}
+
+      {queue && queue.length === 0 && <p className="text-sm text-muted">No historical Type B evidence yet — run the manuscript pipeline from the Overview tab.</p>}
     </div>
   );
 }

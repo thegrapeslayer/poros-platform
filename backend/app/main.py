@@ -527,6 +527,32 @@ def research_counterfactual_cohort(outcome: str = "Phase3Outcome", top_fraction:
     return {"rows": cf.to_dict(orient="records") if len(cf) else [], "n": len(cf)}
 
 
+@app.get("/api/research/manuscript-validation-plan")
+def research_manuscript_validation_plan() -> dict[str, Any]:
+    """Per-feature eligible-class audit for the locked manuscript validation protocol
+    (historical snapshot only, class-balanced where feasible) — computed without
+    drawing the sample, so the proposed counts can be reviewed before any rows are
+    fetched for review."""
+    return eng.manuscript_validation_plan()
+
+
+@app.get("/api/research/manuscript-validation-sample")
+def research_manuscript_validation_sample() -> dict[str, Any]:
+    """The locked manuscript validation sample: historical 2015-12-31 snapshot only,
+    20 rows/feature, class-balanced (10 CONFIRMED_PRESENT / 10 NOT_CONFIRMED) where both
+    classes have enough eligible rows, gracefully degraded (never fabricated) where one
+    class is scarce. Deterministic — same rows every call. This is the ONLY sample
+    /research/validation uses; the general-purpose GET /api/research/validation-sample
+    below still exists for ad hoc QA but is not wired into that page."""
+    df, plan = eng.manuscript_validation_sample()
+    rows = df.to_dict(orient="records") if len(df) else []
+    for r in rows:
+        spec = eng.FEATURE_SPECS.get(r["feature_id"])
+        r["feature_label"] = spec.label if spec else r["feature_id"]
+        r["feature_description"] = spec.description if spec else ""
+    return {"plan": plan, "rows": rows, "n": len(rows)}
+
+
 @app.get("/api/research/validation-sample")
 def research_validation_sample(
     n: int = Query(75, ge=10, le=500),

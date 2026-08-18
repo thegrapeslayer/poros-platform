@@ -281,6 +281,41 @@ export function getValidationSample(n = 75, perFeature?: number) {
   return getJSON<{ rows: ValidationRow[]; n: number }>(`/api/research/validation-sample?${q}`);
 }
 
+export interface ManuscriptValidationFeaturePlan {
+  feature_id: string;
+  eligible_confirmed_present: number;
+  eligible_not_confirmed: number;
+  sampled_confirmed_present: number;
+  sampled_not_confirmed: number;
+  sampled_total: number;
+  limitation: string | null;
+}
+
+export interface ManuscriptValidationPlan {
+  snapshot_date: string;
+  extractor_version: string;
+  per_feature_target: number;
+  per_class_target: number;
+  total_target: number;
+  total_proposed: number;
+  seed: number;
+  features: ManuscriptValidationFeaturePlan[];
+}
+
+// The locked manuscript-validation protocol: historical snapshot only, class-balanced
+// where feasible, deterministic. This is the ONLY sample /research/validation uses —
+// see docs/MANUSCRIPT_REQUIREMENTS.md for why it's a fixed protocol, not a
+// general-purpose configurable sampler.
+export function getManuscriptValidationPlan() {
+  return getJSON<ManuscriptValidationPlan>("/api/research/manuscript-validation-plan");
+}
+
+export function getManuscriptValidationSample() {
+  return getJSON<{ plan: ManuscriptValidationPlan; rows: ValidationRow[]; n: number }>(
+    "/api/research/manuscript-validation-sample"
+  );
+}
+
 export function saveValidationLabel(evidenceId: number, humanLabel: HumanLabel, note?: string) {
   return getJSON<{ saved: boolean }>(`/api/research/validation-sample/${evidenceId}`, {
     method: "POST",

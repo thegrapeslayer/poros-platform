@@ -186,7 +186,14 @@ than no status docs.
   tested, and correct, and `/research/validation` now has a full one-item-at-a-time
   labeling workflow (feature definition, evidence passage, source title/URL/PMID/PMCID/
   DOI, extractor prediction, Confirm/Not confirmed/Ambiguous, optional notes, Save & Next,
-  Back, progress counter, jump-to-item, CSV export) — but `feature_evidence.reviewed=1`
+  Back, progress counter, jump-to-item, CSV export). The sample it draws from is now a
+  **locked, approved protocol** (`manuscript_validation_sample()`) — historical
+  2015-12-31 snapshot only (the exact evidence the frozen dataset's scores are built
+  from), 20 rows/feature/340 total, class-balanced 10 `CONFIRMED_PRESENT`/10
+  `NOT_CONFIRMED` per feature where both have enough eligible rows, gracefully degraded
+  (never fabricated) where one is scarce — 6 of 17 features have a scarce
+  `CONFIRMED_PRESENT` class (as low as 2 eligible rows). The "Sampling plan" table on the
+  page shows this exact audit before any row is fetched. But `feature_evidence.reviewed=1`
   still has zero real rows. Nobody has gone through the actual labeling yet. This cannot
   be done by an AI session without defeating the point of an *independent* human
   second-rater — it genuinely needs the project owner or a qualified reviewer. This is

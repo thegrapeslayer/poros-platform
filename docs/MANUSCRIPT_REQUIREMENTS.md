@@ -63,17 +63,25 @@ Step-by-step, for whoever actually does the human review (does not modify the fr
 dataset — this only ever writes to `feature_evidence.reviewed`/`human_label`/`human_note`
 in the live database, never to `scores`, `feature_values`, or any exported bundle file):
 
-1. **Where**: `/research/validation` in the running frontend (or the raw endpoints below
-   if reviewing offline/programmatically).
-2. **How many**: recommended **20 labeled rows per feature** (~340 total across the 17
-   Type B features) for a per-feature breakdown that isn't dominated by noise from a
-   handful of examples; **10/feature (~170 total)** is a workable first pass if time is
-   limited. Set via the "Target per feature" field on the page, or `per_feature` on
-   `GET /api/research/validation-sample`.
-3. **Sample construction**: `validation_sample(n, seed=42, per_feature)` in `engine.py`
-   groups all `retrieval_success=1` evidence rows by `feature_id`, samples `per_feature`
-   (or `n // n_features` if not given) per group, concatenates. **Deterministic** for a
-   given `(per_feature, seed)` — the same target always reproduces the same rows.
+1. **Where**: `/research/validation` in the running frontend (or
+   `GET /api/research/manuscript-validation-sample` directly if reviewing offline/
+   programmatically).
+2. **How many**: **locked at 20 labeled rows per feature, 340 total** across the 17 Type
+   B features — this is now a fixed, approved protocol
+   (`MANUSCRIPT_VALIDATION_PER_FEATURE`/`_PER_CLASS_TARGET`/`_SEED` in `engine.py`), not
+   a configurable input on the page. (The general-purpose `GET
+   /api/research/validation-sample` with an adjustable `per_feature` still exists for ad
+   hoc QA outside the manuscript claim, but `/research/validation` no longer uses it.)
+3. **Sample construction**: `manuscript_validation_sample()` in `engine.py` restricts to
+   **`snapshot_date='2015-12-31'` only** — the exact historical evidence the frozen
+   dataset's TRS scores are built from, not the live public-site snapshot — then
+   stratifies by `feature_id` **and by the extractor's own predicted class**
+   (`CONFIRMED_PRESENT`/`NOT_CONFIRMED`), targeting 10 of each per feature so a feature's
+   precision/recall isn't computed from a near-single-class sample. Where one class has
+   fewer than 10 eligible rows, all of it is taken (never duplicated) and the shortfall
+   is filled from the other class up to 20 — see `manuscript_validation_plan()` for the
+   exact per-feature audit, surfaced as the "Sampling plan" table on the page before any
+   row is fetched for review. **Deterministic** (fixed seed 42) — always the same 340 rows.
 4. **What you're labeling**: for each row — disease, `feature_id` and its human-readable
    label/definition (from `FEATURE_SPECS`), the extractor's own prediction (`status`:
    `CONFIRMED_PRESENT`/`NOT_CONFIRMED`/`UNASCERTAINED`), the evidence passage
@@ -89,9 +97,9 @@ in the live database, never to `scores`, `feature_values`, or any exported bundl
    `reviewed=1`.
 7. **Progress**: "Item N of TOTAL · M still need a label" on the page; the aggregate
    metrics section above it updates live after every save.
-8. **Resuming without duplicating work**: reload the page (or re-call the sample endpoint)
-   with the **same** `per_feature` value — the deterministic sampling returns the same
-   rows, already-labeled ones show as reviewed with their saved label/note pre-filled and
+8. **Resuming without duplicating work**: reload the page and click "Start / resume
+   labeling" again — the sample is fixed, so it's always the same 340 rows;
+   already-labeled ones show as reviewed with their saved label/note pre-filled and
    editable via Back or "Jump to an item," so nothing is redrawn or lost.
 9. **Final precision/recall/F1/κ**: `GET /api/research/extractor-metrics` — pooled and
    **broken out per `feature_id`** (`by_feature`), computed by `extractor_validation_metrics()`.

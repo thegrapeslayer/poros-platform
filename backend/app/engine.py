@@ -2023,6 +2023,124 @@ def validation_sample(n: int = 100, seed: int = 42, per_feature: int | None = No
     return pd.concat(parts, ignore_index=True) if parts else df.iloc[0:0]
 
 
+# =============================================================================
+# Locked manuscript validation sample
+#
+# Approved protocol (see docs/MANUSCRIPT_REQUIREMENTS.md): validate the extractor
+# against the exact evidence the frozen 100-disease dataset's TRS scores are built
+# from — the historical 2015-12-31 snapshot only, not the live public-site snapshot —
+# stratified by feature_id AND, where feasible, by the extractor's own predicted class
+# (CONFIRMED_PRESENT / NOT_CONFIRMED), so a feature's per-class precision/recall isn't
+# built from a near-single-class sample. This is a fixed, named protocol (not a
+# general-purpose parameterized tool) precisely so the sample used for the manuscript
+# validation claim can't silently drift mid-review.
+# =============================================================================
+
+MANUSCRIPT_VALIDATION_SNAPSHOT = "2015-12-31"
+MANUSCRIPT_VALIDATION_PER_FEATURE = 20
+MANUSCRIPT_VALIDATION_PER_CLASS_TARGET = 10
+MANUSCRIPT_VALIDATION_SEED = 42
+
+
+def manuscript_validation_plan(seed: int = MANUSCRIPT_VALIDATION_SEED) -> dict[str, Any]:
+    """Per-feature eligible CONFIRMED_PRESENT/NOT_CONFIRMED counts in the historical
+    snapshot, and the proposed sampled count of each — computed but not yet drawn.
+    Where one class has fewer than MANUSCRIPT_VALIDATION_PER_CLASS_TARGET eligible rows,
+    all of it is taken (never duplicated/fabricated) and the shortfall is filled from
+    the other class up to MANUSCRIPT_VALIDATION_PER_FEATURE, not silently dropped."""
+    with db_conn() as conn:
+        df = pd.read_sql_query(
+            """SELECT feature_id, status, COUNT(*) AS n FROM feature_evidence
+               WHERE retrieval_success=1 AND snapshot_date=?
+               GROUP BY feature_id, status""",
+            conn, params=(MANUSCRIPT_VALIDATION_SNAPSHOT,),
+        )
+    counts = {fid: {"CONFIRMED_PRESENT": 0, "NOT_CONFIRMED": 0} for fid in TYPE_B_RULES}
+    for _, row in df.iterrows():
+        if row["feature_id"] in counts and row["status"] in ("CONFIRMED_PRESENT", "NOT_CONFIRMED"):
+            counts[row["feature_id"]][row["status"]] = int(row["n"])
+
+    per_class_target = MANUSCRIPT_VALIDATION_PER_CLASS_TARGET
+    total_target = MANUSCRIPT_VALIDATION_PER_FEATURE
+    rows = []
+    for fid in sorted(counts):
+        eligible_cp = counts[fid]["CONFIRMED_PRESENT"]
+        eligible_nc = counts[fid]["NOT_CONFIRMED"]
+        base_cp = min(per_class_target, eligible_cp)
+        base_nc = min(per_class_target, eligible_nc)
+        shortfall = total_target - base_cp - base_nc
+        add_cp = min(shortfall, eligible_cp - base_cp) if shortfall > 0 else 0
+        shortfall -= add_cp
+        add_nc = min(shortfall, eligible_nc - base_nc) if shortfall > 0 else 0
+        sampled_cp = base_cp + add_cp
+        sampled_nc = base_nc + add_nc
+        limitation = None
+        if eligible_cp < per_class_target or eligible_nc < per_class_target:
+            scarce = "CONFIRMED_PRESENT" if eligible_cp < eligible_nc else "NOT_CONFIRMED"
+            limitation = (
+                f"{scarce} is scarce ({eligible_cp if scarce=='CONFIRMED_PRESENT' else eligible_nc} "
+                f"eligible) — sampled all available rather than fabricating balance; "
+                f"remainder filled from the other class."
+            )
+        rows.append({
+            "feature_id": fid,
+            "eligible_confirmed_present": eligible_cp,
+            "eligible_not_confirmed": eligible_nc,
+            "sampled_confirmed_present": sampled_cp,
+            "sampled_not_confirmed": sampled_nc,
+            "sampled_total": sampled_cp + sampled_nc,
+            "limitation": limitation,
+        })
+    return {
+        "snapshot_date": MANUSCRIPT_VALIDATION_SNAPSHOT,
+        "extractor_version": EXTRACTOR_VERSION,
+        "per_feature_target": total_target,
+        "per_class_target": per_class_target,
+        "total_target": total_target * len(counts),
+        "total_proposed": sum(r["sampled_total"] for r in rows),
+        "seed": seed,
+        "features": rows,
+    }
+
+
+def manuscript_validation_sample(seed: int = MANUSCRIPT_VALIDATION_SEED) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Draws the locked manuscript validation sample per manuscript_validation_plan()
+    — feature- and predicted-class-stratified, historical-snapshot-only, deterministic
+    for the fixed seed. Returns (rows, plan) so the caller can show the plan alongside
+    the actual rows without a second query."""
+    plan = manuscript_validation_plan(seed)
+    with db_conn() as conn:
+        df = pd.read_sql_query(
+            """SELECT e.evidence_id,d.canonical_name AS Disease,e.snapshot_date,e.feature_id,e.status,e.confidence,
+                      e.supporting_snippet,e.document_id,e.reviewed,e.human_label,e.human_note,
+                      e.extractor_version,
+                      COALESCE(doc.title,'') AS source_title, COALESCE(doc.url,'') AS source_url,
+                      COALESCE(doc.pmid,'') AS pmid, COALESCE(doc.pmcid,'') AS pmcid,
+                      COALESCE(doc.doi,'') AS doi
+               FROM feature_evidence e
+               JOIN diseases d ON d.disease_id=e.disease_id
+               LEFT JOIN documents doc ON doc.document_id=e.document_id AND doc.disease_id=e.disease_id
+                                          AND doc.snapshot_date=e.snapshot_date
+               WHERE e.retrieval_success=1 AND e.snapshot_date=?""",
+            conn, params=(MANUSCRIPT_VALIDATION_SNAPSHOT,),
+        )
+    if df.empty:
+        return df, plan
+
+    parts = []
+    for row in plan["features"]:
+        fid = row["feature_id"]
+        sub = df[df["feature_id"] == fid]
+        cp_pool = sub[sub["status"] == "CONFIRMED_PRESENT"]
+        nc_pool = sub[sub["status"] == "NOT_CONFIRMED"]
+        if row["sampled_confirmed_present"]:
+            parts.append(cp_pool.sample(n=row["sampled_confirmed_present"], random_state=seed))
+        if row["sampled_not_confirmed"]:
+            parts.append(nc_pool.sample(n=row["sampled_not_confirmed"], random_state=seed))
+    sampled = pd.concat(parts, ignore_index=True) if parts else df.iloc[0:0]
+    return sampled, plan
+
+
 VALID_HUMAN_LABELS = ("CONFIRMED_PRESENT", "NOT_CONFIRMED", "AMBIGUOUS")
 
 

@@ -15,6 +15,42 @@ Format: newest first. `[Type]` one of `Docs`, `Fix`, `Feature`, `Rebrand`, `Data
 
 ---
 
+## 2026-08-16 — [Methodology] Locked, class-balanced manuscript validation sample
+
+Before any labeling started, audited eligible-example counts per feature and found the
+naive stratified sample (20/feature, uniform-random within feature) would have been
+badly class-imbalanced for 6 of 17 features — e.g. `patient_organization` and
+`expedited_designation_evidence` each have only **2** eligible `CONFIRMED_PRESENT` rows
+in the historical snapshot out of 100 eligible total, so a uniform sample would very
+likely land ~19 `NOT_CONFIRMED` / ~1 `CONFIRMED_PRESENT`, making that feature's precision
+essentially unmeasurable despite "20 reviewed."
+
+Added a new, locked sampling protocol (`manuscript_validation_sample()` /
+`manuscript_validation_plan()` in `engine.py`, fixed constants not runtime parameters):
+restricted to the **2015-12-31 historical snapshot only** (the exact evidence the frozen
+100-disease dataset's TRS scores are built from — previously the sampler pooled that
+with the live public-site snapshot), stratified by feature **and** by the extractor's
+predicted class, targeting 10/10 `CONFIRMED_PRESENT`/`NOT_CONFIRMED` per feature where
+both have ≥10 eligible rows. Where one class is scarce, every eligible row of it is used
+(never duplicated or fabricated) and the shortfall is filled from the other class so
+every feature still reaches 20 — this happens for 6 features, all with a scarce
+`CONFIRMED_PRESENT` class. Total: still 340, unchanged from the original recommendation.
+
+`/research/validation` now uses **only** this locked sample — the free-form "target per
+feature" input is gone, replaced with a fixed "Historical manuscript validation" header
+(records/feature, total target, extractor version, snapshot date, all read from the
+backend so they can't drift from the actual constants) and a "Sampling plan" table
+showing the full eligible/proposed breakdown, with limitation notes on scarce features,
+before any row is fetched for review. Verified end-to-end in a real browser: plan table
+renders with correct numbers, "Start / resume labeling" fetches exactly 340 rows all
+from the historical snapshot, per-feature totals match the plan exactly, confirmed
+zero rows were accidentally marked reviewed during verification. The general-purpose
+`GET /api/research/validation-sample` (configurable, unfiltered by snapshot) still
+exists for ad hoc QA but is no longer wired into the page. No extraction, scoring, or
+frozen evidence was touched.
+
+---
+
 ## 2026-08-16 — [Feature] Freeze manifest + full validation labeling workflow
 
 **Freeze manifest**: generated `FREEZE_MANIFEST.json`/`.md` inside the frozen bundle
