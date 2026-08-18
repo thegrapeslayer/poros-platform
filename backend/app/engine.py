@@ -549,6 +549,7 @@ CREATE TABLE IF NOT EXISTS feature_evidence (
     retrieval_success INTEGER,
     reviewed INTEGER DEFAULT 0,
     human_label TEXT,
+    human_note TEXT,
     retrieved_at TEXT,
     FOREIGN KEY (disease_id) REFERENCES diseases(disease_id)
 );
@@ -657,6 +658,12 @@ def db_conn():
 def init_db() -> None:
     with db_conn() as conn:
         conn.executescript(SCHEMA)
+        # CREATE TABLE IF NOT EXISTS in SCHEMA above doesn't add columns to an
+        # already-existing table — additive, idempotent migration for databases created
+        # before human_note existed. Pure QA/review metadata, not a scoring input.
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(feature_evidence)").fetchall()}
+        if "human_note" not in cols:
+            conn.execute("ALTER TABLE feature_evidence ADD COLUMN human_note TEXT")
 
 
 def now_iso() -> str:
@@ -1992,8 +1999,15 @@ def validation_sample(n: int = 100, seed: int = 42, per_feature: int | None = No
     with db_conn() as conn:
         df = pd.read_sql_query(
             """SELECT e.evidence_id,d.canonical_name AS Disease,e.snapshot_date,e.feature_id,e.status,e.confidence,
-                      e.supporting_snippet,e.document_id,e.reviewed,e.human_label
-               FROM feature_evidence e JOIN diseases d ON d.disease_id=e.disease_id
+                      e.supporting_snippet,e.document_id,e.reviewed,e.human_label,e.human_note,
+                      e.extractor_version,
+                      COALESCE(doc.title,'') AS source_title, COALESCE(doc.url,'') AS source_url,
+                      COALESCE(doc.pmid,'') AS pmid, COALESCE(doc.pmcid,'') AS pmcid,
+                      COALESCE(doc.doi,'') AS doi
+               FROM feature_evidence e
+               JOIN diseases d ON d.disease_id=e.disease_id
+               LEFT JOIN documents doc ON doc.document_id=e.document_id AND doc.disease_id=e.disease_id
+                                          AND doc.snapshot_date=e.snapshot_date
                WHERE e.retrieval_success=1""",
             conn,
         )
@@ -2009,9 +2023,41 @@ def validation_sample(n: int = 100, seed: int = 42, per_feature: int | None = No
     return pd.concat(parts, ignore_index=True) if parts else df.iloc[0:0]
 
 
-def save_human_validation(evidence_id: int, human_label: str) -> None:
+VALID_HUMAN_LABELS = ("CONFIRMED_PRESENT", "NOT_CONFIRMED", "AMBIGUOUS")
+
+
+def save_human_validation(evidence_id: int, human_label: str, note: str | None = None) -> None:
+    """AMBIGUOUS means the reviewer could not confidently apply CONFIRMED_PRESENT or
+    NOT_CONFIRMED to this snippet — it's excluded from the confusion matrix in
+    extractor_validation_metrics() (not counted as agreement or disagreement) rather
+    than forced into a binary judgment that would misrepresent the review."""
     with db_conn() as conn:
-        conn.execute("UPDATE feature_evidence SET reviewed=1,human_label=? WHERE evidence_id=?", (human_label, evidence_id))
+        conn.execute(
+            "UPDATE feature_evidence SET reviewed=1,human_label=?,human_note=? WHERE evidence_id=?",
+            (human_label, note, evidence_id),
+        )
+
+
+def validation_export() -> pd.DataFrame:
+    """Every reviewed (human-labeled) row with full context, for a manuscript
+    validation supplement — disease, feature, machine prediction, human label/note,
+    evidence snippet, source. Reporting-only; never used by scoring."""
+    with db_conn() as conn:
+        return pd.read_sql_query(
+            """SELECT e.evidence_id, d.canonical_name AS disease, e.feature_id, e.snapshot_date,
+                      e.status AS machine_status, e.confidence AS machine_confidence,
+                      e.human_label, e.human_note, e.supporting_snippet, e.extractor_version,
+                      COALESCE(doc.title,'') AS source_title, COALESCE(doc.url,'') AS source_url,
+                      COALESCE(doc.pmid,'') AS pmid, COALESCE(doc.pmcid,'') AS pmcid,
+                      COALESCE(doc.doi,'') AS doi
+               FROM feature_evidence e
+               JOIN diseases d ON d.disease_id=e.disease_id
+               LEFT JOIN documents doc ON doc.document_id=e.document_id AND doc.disease_id=e.disease_id
+                                          AND doc.snapshot_date=e.snapshot_date
+               WHERE e.reviewed=1 AND e.human_label IS NOT NULL
+               ORDER BY d.canonical_name, e.feature_id""",
+            conn,
+        )
 
 
 def stale_extractor_versions() -> list[str]:
@@ -2074,7 +2120,12 @@ def extractor_validation_metrics() -> dict[str, Any]:
     of the Type B extractor against whatever human labels have been saved so far. The
     aggregate figure can hide a feature with poor precision hiding behind others that
     are doing better — the `by_feature` breakdown is what a manuscript methods section
-    should actually cite per feature, not just the pooled number."""
+    should actually cite per feature, not just the pooled number.
+
+    Rows labeled AMBIGUOUS are counted in `n_reviewed_total` and `ambiguous_count` but
+    excluded from the confusion matrix / precision / recall / F1 / kappa — the reviewer
+    explicitly could not apply a binary judgment, so forcing one in would misrepresent
+    both the extractor and the review."""
     with db_conn() as conn:
         df = pd.read_sql_query(
             "SELECT feature_id,status,human_label FROM feature_evidence WHERE reviewed=1 AND human_label IS NOT NULL",
@@ -2082,10 +2133,16 @@ def extractor_validation_metrics() -> dict[str, Any]:
         )
     if df.empty:
         return {"n": 0}
+    ambiguous_count = int((df["human_label"] == "AMBIGUOUS").sum())
+    df = df[df["human_label"] != "AMBIGUOUS"]
+    if df.empty:
+        return {"n": 0, "n_reviewed_total": ambiguous_count, "ambiguous_count": ambiguous_count}
     if not SKLEARN_AVAILABLE:
         return {"n": len(df), "error": "scikit-learn is not installed — run: pip install scikit-learn"}
 
     overall = _confusion_metrics(df)
+    overall["n_reviewed_total"] = len(df) + ambiguous_count
+    overall["ambiguous_count"] = ambiguous_count
     overall["by_feature"] = {fid: _confusion_metrics(g) for fid, g in df.groupby("feature_id")}
     overall["rater_note"] = (
         "This audit is a repair/QA pass on the extractor, not an independent human "
@@ -2093,7 +2150,8 @@ def extractor_validation_metrics() -> dict[str, Any]:
         "an independent human reviewer coding the same sample blind to the machine output. "
         "Per-feature n is often small — read per-feature precision/recall/F1 as indicative "
         "of where the extractor may be weaker, not as a stable estimate, until more labels "
-        "are collected for that specific feature."
+        "are collected for that specific feature. AMBIGUOUS-flagged rows are excluded from "
+        "these metrics, not counted as errors."
     )
     return overall
 

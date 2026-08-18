@@ -15,7 +15,7 @@ from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from . import engine as eng
@@ -134,7 +134,8 @@ class PipelineRequest(BaseModel):
 
 
 class ValidationLabelRequest(BaseModel):
-    human_label: str  # "CONFIRMED_PRESENT" | "NOT_CONFIRMED"
+    human_label: str  # "CONFIRMED_PRESENT" | "NOT_CONFIRMED" | "AMBIGUOUS"
+    note: str | None = None
 
 
 class WipeRequest(BaseModel):
@@ -535,16 +536,25 @@ def research_validation_sample(
     every feature_id so a per-feature precision/recall breakdown is actually possible
     (see GET /api/research/extractor-metrics). Per the project's own audit: this is an
     extractor QA pass, not a formal independent second human rater — see the
-    rater_note on the metrics endpoint below."""
+    rater_note on the metrics endpoint below. Deterministic for a given (n, per_feature)
+    pair (fixed seed) — reloading with the same params reproduces the same rows, so
+    already-reviewed ones are simply the ones with `reviewed: true` in the response;
+    resuming a review session means re-requesting the same params, not tracking state
+    client-side."""
     df = eng.validation_sample(n, per_feature=per_feature)
-    return {"rows": df.to_dict(orient="records") if len(df) else [], "n": len(df)}
+    rows = df.to_dict(orient="records") if len(df) else []
+    for r in rows:
+        spec = eng.FEATURE_SPECS.get(r["feature_id"])
+        r["feature_label"] = spec.label if spec else r["feature_id"]
+        r["feature_description"] = spec.description if spec else ""
+    return {"rows": rows, "n": len(rows)}
 
 
 @app.post("/api/research/validation-sample/{evidence_id}")
 def research_validation_label(evidence_id: int, req: ValidationLabelRequest) -> dict[str, Any]:
-    if req.human_label not in ("CONFIRMED_PRESENT", "NOT_CONFIRMED"):
-        raise HTTPException(400, "human_label must be CONFIRMED_PRESENT or NOT_CONFIRMED.")
-    eng.save_human_validation(evidence_id, req.human_label)
+    if req.human_label not in eng.VALID_HUMAN_LABELS:
+        raise HTTPException(400, f"human_label must be one of {eng.VALID_HUMAN_LABELS}.")
+    eng.save_human_validation(evidence_id, req.human_label, req.note)
     return {"saved": True, "evidence_id": evidence_id, "human_label": req.human_label}
 
 
@@ -554,6 +564,19 @@ def research_extractor_metrics() -> dict[str, Any]:
     extractor against whatever human labels have been saved so far via the
     validation-sample endpoint above."""
     return eng.extractor_validation_metrics()
+
+
+@app.get("/api/research/validation-export")
+def research_validation_export() -> Response:
+    """CSV of every human-reviewed row (disease, feature, machine status, human
+    label/note, evidence snippet, source) — the manuscript validation supplement.
+    Read-only over already-saved labels; does not touch scoring or extraction."""
+    df = eng.validation_export()
+    return Response(
+        content=df.to_csv(index=False),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=validation_labels.csv"},
+    )
 
 
 @app.get("/api/research/extractor-versions/stale")

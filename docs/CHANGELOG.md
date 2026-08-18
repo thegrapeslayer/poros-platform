@@ -15,6 +15,35 @@ Format: newest first. `[Type]` one of `Docs`, `Fix`, `Feature`, `Rebrand`, `Data
 
 ---
 
+## 2026-08-16 — [Feature] Freeze manifest + full validation labeling workflow
+
+**Freeze manifest**: generated `FREEZE_MANIFEST.json`/`.md` inside the frozen bundle
+directory — exact git commit (`d4d4dbfabcbc908f7ac367163924688b11bd8138`), all
+versions/cohort metadata, and a SHA-256 checksum for every one of the bundle's 12 files,
+categorized (scores / tables-supplements / figures / metadata-documentation /
+archive-raw-and-processed). Nothing was regenerated — every value read from files or
+`git log` as they already existed.
+
+**Validation labeling workflow**: `/research/validation` rebuilt as a real
+one-item-at-a-time review tool instead of a flat list — shows feature label/definition
+(not just the raw `feature_id`), evidence passage, source title/URL/PMID/PMCID/DOI (new `documents`
+join in `validation_sample()`), extractor prediction, three label values
+(`CONFIRMED_PRESENT`/`NOT_CONFIRMED`/new `AMBIGUOUS`, which is excluded from precision/
+recall/F1/κ rather than forced into a binary judgment), an optional note (new
+`human_note` column on `feature_evidence`, added via an idempotent `ALTER TABLE` migration
+in `init_db()`), Save & Next / Back / Skip, a live progress counter, a jump-to-item list,
+and a new `GET /api/research/validation-export` CSV endpoint for the manuscript
+supplement. Sampling is stratified and deterministic (fixed seed for a given
+`per_feature`), so reloading with the same target resumes at the same rows —
+already-labeled ones show their saved label/note, nothing is redrawn or duplicated.
+Verified end-to-end in a real browser against a real backend: loaded a queue, saved a
+label with a note, confirmed live metrics/CSV export reflected it, confirmed Back showed
+it pre-filled for editing, then reset the smoke-test label so it doesn't contaminate a
+real review. **No scoring or extraction logic touched** — this is entirely QA-metadata
+plumbing on top of the existing frozen dataset, which itself was not modified.
+
+---
+
 ## 2026-08-14 — [Data] Froze the historical manuscript dataset; added per-feature validation metrics
 
 Ran `POST /api/research/pipeline/run` for real against the full 100-disease cohort at

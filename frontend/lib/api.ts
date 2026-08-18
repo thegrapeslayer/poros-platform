@@ -252,17 +252,28 @@ export function getCounterfactualCohort(outcome = "Phase3Outcome", topFraction =
   );
 }
 
+export type HumanLabel = "CONFIRMED_PRESENT" | "NOT_CONFIRMED" | "AMBIGUOUS";
+
 export interface ValidationRow {
   evidence_id: number;
   Disease: string;
   snapshot_date: string;
   feature_id: string;
+  feature_label: string;
+  feature_description: string;
   status: string;
   confidence: number;
   supporting_snippet: string | null;
   document_id: string | null;
+  extractor_version: string | null;
+  source_title: string;
+  source_url: string;
+  pmid: string;
+  pmcid: string;
+  doi: string;
   reviewed: number;
   human_label: string | null;
+  human_note: string | null;
 }
 
 export function getValidationSample(n = 75, perFeature?: number) {
@@ -270,12 +281,16 @@ export function getValidationSample(n = 75, perFeature?: number) {
   return getJSON<{ rows: ValidationRow[]; n: number }>(`/api/research/validation-sample?${q}`);
 }
 
-export function saveValidationLabel(evidenceId: number, humanLabel: "CONFIRMED_PRESENT" | "NOT_CONFIRMED") {
+export function saveValidationLabel(evidenceId: number, humanLabel: HumanLabel, note?: string) {
   return getJSON<{ saved: boolean }>(`/api/research/validation-sample/${evidenceId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ human_label: humanLabel }),
+    body: JSON.stringify({ human_label: humanLabel, note: note || null }),
   });
+}
+
+export function validationExportUrl() {
+  return `${API_BASE}/api/research/validation-export`;
 }
 
 export interface FeatureValidationMetrics {
@@ -294,6 +309,8 @@ export interface FeatureValidationMetrics {
 
 export interface ExtractorMetrics {
   n: number;
+  n_reviewed_total?: number;
+  ambiguous_count?: number;
   error?: string;
   accuracy?: number;
   precision?: number;

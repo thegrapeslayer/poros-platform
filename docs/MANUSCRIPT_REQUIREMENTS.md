@@ -57,6 +57,51 @@ implemented in `engine.py`:
    a provenance copy of the full SQLite database. Reachable via
    `GET /api/research/export` and the `/research/export` page.
 
+## Extractor validation labeling workflow
+
+Step-by-step, for whoever actually does the human review (does not modify the frozen
+dataset — this only ever writes to `feature_evidence.reviewed`/`human_label`/`human_note`
+in the live database, never to `scores`, `feature_values`, or any exported bundle file):
+
+1. **Where**: `/research/validation` in the running frontend (or the raw endpoints below
+   if reviewing offline/programmatically).
+2. **How many**: recommended **20 labeled rows per feature** (~340 total across the 17
+   Type B features) for a per-feature breakdown that isn't dominated by noise from a
+   handful of examples; **10/feature (~170 total)** is a workable first pass if time is
+   limited. Set via the "Target per feature" field on the page, or `per_feature` on
+   `GET /api/research/validation-sample`.
+3. **Sample construction**: `validation_sample(n, seed=42, per_feature)` in `engine.py`
+   groups all `retrieval_success=1` evidence rows by `feature_id`, samples `per_feature`
+   (or `n // n_features` if not given) per group, concatenates. **Deterministic** for a
+   given `(per_feature, seed)` — the same target always reproduces the same rows.
+4. **What you're labeling**: for each row — disease, `feature_id` and its human-readable
+   label/definition (from `FEATURE_SPECS`), the extractor's own prediction (`status`:
+   `CONFIRMED_PRESENT`/`NOT_CONFIRMED`/`UNASCERTAINED`), the evidence passage
+   (`supporting_snippet`), and the source it came from (title, URL, PMID, PMCID, DOI —
+   joined from the `documents` table). Judge whether the passage actually supports the
+   feature being present for that disease.
+5. **Allowed values**: `CONFIRMED_PRESENT` (evidence genuinely supports it),
+   `NOT_CONFIRMED` (it doesn't), `AMBIGUOUS` (can't confidently judge — excluded from the
+   confusion matrix/precision/recall/F1/κ entirely, not counted as an error either way).
+   An optional free-text note can go with any of the three.
+6. **Saving**: click a label (and optionally type a note) then "Save & Next" — calls
+   `POST /api/research/validation-sample/{evidence_id}` with `{human_label, note}`, sets
+   `reviewed=1`.
+7. **Progress**: "Item N of TOTAL · M still need a label" on the page; the aggregate
+   metrics section above it updates live after every save.
+8. **Resuming without duplicating work**: reload the page (or re-call the sample endpoint)
+   with the **same** `per_feature` value — the deterministic sampling returns the same
+   rows, already-labeled ones show as reviewed with their saved label/note pre-filled and
+   editable via Back or "Jump to an item," so nothing is redrawn or lost.
+9. **Final precision/recall/F1/κ**: `GET /api/research/extractor-metrics` — pooled and
+   **broken out per `feature_id`** (`by_feature`), computed by `extractor_validation_metrics()`.
+   `AMBIGUOUS` rows are tallied separately (`ambiguous_count`) and excluded from these
+   numbers.
+10. **Export for the manuscript supplement**: `GET /api/research/validation-export` — CSV
+    of every reviewed row (disease, feature, machine prediction, human label/note,
+    evidence snippet, source, extractor version), or the "Export completed validation
+    labels" link on the page itself.
+
 ## The frozen bundle — current authoritative version
 
 **`../Manuscript Bundle/frozen_2026-08-14_typeB_rules_v3.1_n100/`** (one directory above
@@ -66,7 +111,10 @@ outbound internet for the full `DEFAULT_MANUSCRIPT_COHORT` (100 diseases), under
 extractor and model versions currently in `engine.py`. **100/100 diseases resolved and
 scored, 0 retrieval errors.** Its own `README.txt` documents cohort_id
 (`manuscript_99262879ff`), exact versions, top-line AUCs, and contents; not repeated here.
-Cite *this* bundle going forward, not the older one below.
+`FREEZE_MANIFEST.json`/`.md` in that same directory carry the exact git commit
+(`d4d4dbfabcbc908f7ac367163924688b11bd8138`) and a SHA-256 checksum for every file in the
+bundle — use those to verify a copy of this bundle hasn't been altered. Cite *this*
+bundle going forward, not the older one below.
 
 This directly resolves the extractor-version reconciliation issue that was open in
 earlier passes of this document: rather than trying to reconstruct what changed between

@@ -183,13 +183,17 @@ than no status docs.
 ## Implemented but incomplete / broken
 
 - **Extractor validation has no human labels yet**: the metrics/sampling code is real,
-  tested, and correct (see above), but `feature_evidence.reviewed=1` has zero real rows
-  — nobody has gone through `/research/validation` (or pulled
-  `GET /api/research/validation-sample` and labeled offline) against the current
-  evidence. This cannot be done by an AI session without defeating the point of an
-  *independent* human second-rater — it genuinely needs the project owner or a qualified
-  reviewer. This is the single biggest remaining scientific-credibility gap per the
-  project owner's own stated priorities.
+  tested, and correct, and `/research/validation` now has a full one-item-at-a-time
+  labeling workflow (feature definition, evidence passage, source title/URL/PMID/PMCID/
+  DOI, extractor prediction, Confirm/Not confirmed/Ambiguous, optional notes, Save & Next,
+  Back, progress counter, jump-to-item, CSV export) — but `feature_evidence.reviewed=1`
+  still has zero real rows. Nobody has gone through the actual labeling yet. This cannot
+  be done by an AI session without defeating the point of an *independent* human
+  second-rater — it genuinely needs the project owner or a qualified reviewer. This is
+  the single biggest remaining scientific-credibility gap per the project owner's own
+  stated priorities. See [MANUSCRIPT_REQUIREMENTS.md](MANUSCRIPT_REQUIREMENTS.md) for the
+  step-by-step workflow (endpoint, recommended sample size, label definitions, resume
+  semantics, metrics/export commands).
 - **Portfolio coverage depends on when you last ran a refresh**: `backend/app/data/`
   doesn't exist until the backend runs once and `POST /api/admin/refresh` (or
   `python seed_demo.py` for 3 offline demo diseases) has populated it — check
