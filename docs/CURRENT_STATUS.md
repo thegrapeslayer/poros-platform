@@ -194,18 +194,25 @@ than no status docs.
   (never fabricated) where one is scarce — 6 of 17 features have a scarce
   `CONFIRMED_PRESENT` class (as low as 2 eligible rows). The "Sampling plan" table on the
   page shows this exact audit before any row is fetched. A CSV import/restore path also
-  now exists (`POST /api/research/validation-import`, "Restore from CSV" on the same
-  page) specifically so losing application state mid-review isn't catastrophic — matches
-  on `evidence_id` against the *current* frozen sample, always dry-runs first, never
-  silently overwrites a conflicting existing label, and preserves every uploaded file as
-  an audit artifact. Verified with 14 scenarios (fresh restore, idempotent re-import,
-  conflict detection with and without overwrite, malformed/unmatched/duplicate/
-  invalid-label rejection, missing-column rejection) against a real exported CSV — all
-  passed, and the frozen bundle archive's checksums were confirmed unchanged afterward.
-  `export_manuscript_bundle()` now also includes `validation_metrics.json` and
-  `validation_labels.csv` automatically, whatever's been reviewed at export time. But
-  `feature_evidence.reviewed=1` still has zero real rows. Nobody has gone through the
-  actual labeling yet. This cannot
+  exists (`POST /api/research/validation-import`, "Restore from CSV" on the same page)
+  specifically so losing application state mid-review isn't catastrophic — always
+  dry-runs first, never silently overwrites a conflicting existing label, preserves every
+  uploaded file as an audit artifact. **Matching is two-tiered**: exact `evidence_id`
+  first, falling back to the natural key `(disease, feature_id)` against the full
+  historical pool when it doesn't resolve — added after the project owner's real
+  340-label CSV (from a different database instance than the one testing was done
+  against) failed to match on `evidence_id` alone at 0/340, since that's an
+  autoincrement surrogate key that isn't portable across separate instances/runs. A row
+  that resolves but isn't part of the *current* 340-row sample is its own bucket
+  (`outside_current_sample`), never written. Verified with 16 scenarios total across two
+  passes (original: fresh restore, idempotent re-import, conflict detection with/without
+  overwrite, unmatched/duplicate/invalid-label/missing-column rejection; fallback fix:
+  cross-instance restore via natural key, outside-sample-row exclusion) against real
+  exported CSVs — all passed, and the frozen bundle archive's checksums were confirmed
+  unchanged afterward. `export_manuscript_bundle()` now also includes
+  `validation_metrics.json` and `validation_labels.csv` automatically, whatever's been
+  reviewed at export time. But `feature_evidence.reviewed=1` still has zero real rows.
+  Nobody has gone through the actual labeling yet. This cannot
   be done by an AI session without defeating the point of an *independent* human
   second-rater — it genuinely needs the project owner or a qualified reviewer. This is
   the single biggest remaining scientific-credibility gap per the project owner's own

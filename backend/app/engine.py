@@ -2192,12 +2192,6 @@ def validation_export() -> pd.DataFrame:
 # =============================================================================
 
 _IMPORT_REQUIRED_COLUMNS = ("evidence_id", "human_label")
-_IMPORT_CROSSCHECK_COLUMNS = {
-    "feature_id": "feature_id",
-    "disease": "Disease",
-    "snapshot_date": "snapshot_date",
-    "machine_status": "status",
-}
 
 
 def _frozen_sample_lookup() -> dict[int, dict[str, Any]]:
@@ -2217,25 +2211,65 @@ def _frozen_sample_lookup() -> dict[int, dict[str, Any]]:
     }
 
 
+def _historical_evidence_lookup() -> dict[tuple[str, str], dict[str, Any]]:
+    """(disease name lowercased, feature_id) -> {evidence_id, status} for every eligible
+    row in the historical 2015-12-31 snapshot — the FULL pool (1,700 rows), not just the
+    340 currently sampled.
+
+    `evidence_id` is an autoincrement surrogate key: it is NOT portable across separate
+    database instances/runs. Two independent pipeline runs over the same cohort produce
+    the same *content* (same disease+feature+snapshot classifications, assuming the
+    extractor version and the underlying literature haven't changed) but different
+    row-insertion order, hence different evidence_id numbers. A CSV exported from a
+    different database instance than the one currently running will have evidence_ids
+    that don't resolve — this natural key (disease, feature_id) is what actually
+    identifies a Type B decision conceptually, and is what import_validation_csv() falls
+    back to when the surrogate id doesn't match."""
+    with db_conn() as conn:
+        df = pd.read_sql_query(
+            """SELECT e.evidence_id, d.canonical_name AS Disease, e.feature_id, e.status
+               FROM feature_evidence e JOIN diseases d ON d.disease_id=e.disease_id
+               WHERE e.retrieval_success=1 AND e.snapshot_date=?""",
+            conn, params=(MANUSCRIPT_VALIDATION_SNAPSHOT,),
+        )
+    return {
+        (str(r["Disease"]).strip().lower(), r["feature_id"]): {"evidence_id": int(r["evidence_id"]), "status": r["status"]}
+        for _, r in df.iterrows()
+    }
+
+
 def import_validation_csv(
     df: pd.DataFrame, overwrite_conflicts: bool = False, dry_run: bool = True
 ) -> dict[str, Any]:
     """Validate (and optionally apply) a restore of human validation labels from an
-    exported CSV. Every row is classified into exactly one bucket:
+    exported CSV. Matching is two-tiered because `evidence_id` is an autoincrement
+    surrogate key, not portable across separate database instances/runs — a CSV
+    exported from a different backend instance (a redeploy, a different machine, a
+    reset local database) than the one currently running will have evidence_ids that
+    simply don't exist here anymore, even though the underlying disease+feature
+    evidence is identical:
 
-      importable    evidence_id is in the current frozen sample, not yet reviewed
-      identical     already reviewed with this exact label (no-op, still counted restored)
-      conflict      already reviewed with a DIFFERENT label — only written if overwrite_conflicts
-      duplicate     evidence_id appears more than once in the CSV — none of its rows written
-      unmatched     evidence_id doesn't exist, or isn't part of the current frozen sample
-      malformed     evidence_id is valid but the CSV's own feature_id/disease/snapshot_date/
-                    machine_status (whichever columns are present) don't match what's
-                    actually on file for it — signals a corrupted or wrong-run export
-      invalid_label human_label isn't CONFIRMED_PRESENT/NOT_CONFIRMED/AMBIGUOUS
+      1. Try the CSV's own `evidence_id` against the current frozen sample directly.
+      2. If that doesn't resolve, fall back to the natural key — (disease, feature_id)
+         — against the full historical evidence pool (not just the 340 sampled rows),
+         using whichever *current* evidence_id now represents that same conceptual
+         decision.
+
+    Every row is classified into exactly one bucket:
+
+      importable            new match (via either method), not yet reviewed
+      identical              already reviewed with this exact label (no-op, still restored)
+      conflict                already reviewed with a DIFFERENT label — only written if overwrite_conflicts
+      duplicate               two rows in this CSV resolve to the same current evidence_id
+      unmatched               no evidence_id or (disease, feature_id) match exists at all
+      outside_current_sample  real historical evidence, correctly matched, but not part of
+                               the CURRENT 340-row locked sample (a different random subset
+                               was drawn this time) — never written; the locked sample is
+                               not expanded to accommodate it
+      invalid_label           human_label isn't CONFIRMED_PRESENT/NOT_CONFIRMED/AMBIGUOUS
 
     Only `importable`, `identical`, and (if overwrite_conflicts) `conflict` rows are ever
-    written, and only when dry_run=False. Nothing is written on a dry run — the report is
-    the same either way, so a dry run is a reliable preview of what an apply would do.
+    written, and only when dry_run=False. Nothing is written on a dry run.
     """
     missing_cols = [c for c in _IMPORT_REQUIRED_COLUMNS if c not in df.columns]
     if missing_cols:
@@ -2246,81 +2280,111 @@ def import_validation_csv(
         }
 
     frozen = _frozen_sample_lookup()
+    historical = _historical_evidence_lookup()
+    can_fallback = "disease" in df.columns and "feature_id" in df.columns
 
-    # Existing DB state for every evidence_id in the frozen sample, regardless of
-    # whether this CSV mentions it — needed to detect identical vs. conflict.
     with db_conn() as conn:
         existing_rows = conn.execute(
             "SELECT evidence_id, human_label, human_note FROM feature_evidence WHERE reviewed=1"
         ).fetchall()
     existing = {int(r["evidence_id"]): {"human_label": r["human_label"], "human_note": r["human_note"]} for r in existing_rows}
 
-    dup_ids = set(df["evidence_id"][df["evidence_id"].duplicated(keep=False)].tolist())
+    raw_eids = pd.to_numeric(df["evidence_id"], errors="coerce")
+    raw_dup_ids = set(raw_eids[raw_eids.notna() & raw_eids.duplicated(keep=False)].tolist())
 
     buckets: dict[str, list[dict[str, Any]]] = {
         "importable": [], "identical": [], "conflict": [], "duplicate": [],
-        "unmatched": [], "malformed": [], "invalid_label": [],
+        "unmatched": [], "outside_current_sample": [], "invalid_label": [],
     }
     to_write: list[tuple[int, str, str | None]] = []
+    resolved_seen: set[int] = set()
 
     for _, row in df.iterrows():
         raw_eid = row.get("evidence_id")
         label = row.get("human_label")
         note = row.get("human_note") if "human_note" in df.columns else None
         note = None if (note is None or (isinstance(note, float) and pd.isna(note))) else str(note)
-        detail = {"evidence_id": raw_eid, "human_label": label}
-
-        try:
-            eid = int(raw_eid)
-        except (TypeError, ValueError):
-            buckets["malformed"].append({**detail, "reason": "evidence_id is not a valid integer."})
-            continue
-
-        if eid in dup_ids:
-            buckets["duplicate"].append({**detail, "reason": "evidence_id appears more than once in this CSV."})
-            continue
+        detail: dict[str, Any] = {"evidence_id": raw_eid, "human_label": label}
 
         if not isinstance(label, str) or label not in VALID_HUMAN_LABELS:
             buckets["invalid_label"].append({**detail, "reason": f"human_label must be one of {VALID_HUMAN_LABELS}."})
             continue
 
-        frozen_row = frozen.get(eid)
-        if frozen_row is None:
+        try:
+            eid = int(raw_eid)
+        except (TypeError, ValueError):
+            eid = None
+
+        if eid is not None and eid in raw_dup_ids:
+            buckets["duplicate"].append({**detail, "reason": "This evidence_id appears more than once in the CSV itself."})
+            continue
+
+        resolved_eid: int | None = None
+        resolved_status: str | None = None
+        match_source: str | None = None
+
+        frozen_row = frozen.get(eid) if eid is not None else None
+        if frozen_row is not None:
+            resolved_eid, resolved_status, match_source = eid, frozen_row["status"], "evidence_id"
+
+        if resolved_eid is None and can_fallback:
+            csv_disease = row.get("disease")
+            csv_feature = row.get("feature_id")
+            if pd.notna(csv_disease) and pd.notna(csv_feature):
+                hist_row = historical.get((str(csv_disease).strip().lower(), str(csv_feature)))
+                if hist_row is not None:
+                    resolved_eid, resolved_status, match_source = hist_row["evidence_id"], hist_row["status"], "disease+feature_id"
+
+        if resolved_eid is None:
             buckets["unmatched"].append({
                 **detail,
-                "reason": "evidence_id is not part of the current frozen manuscript validation sample "
-                          "(either it doesn't exist, or it's real evidence from a different snapshot/sample).",
+                "reason": "No evidence_id match, and no (disease, feature_id) fallback match either — "
+                          "this row doesn't correspond to any evidence in the current historical snapshot.",
             })
             continue
 
-        mismatches = []
-        for csv_col, frozen_key in _IMPORT_CROSSCHECK_COLUMNS.items():
-            if csv_col in df.columns:
-                csv_val = row.get(csv_col)
-                if pd.notna(csv_val) and str(csv_val) != str(frozen_row[frozen_key]):
-                    mismatches.append(f"{csv_col}: CSV has '{csv_val}', frozen sample has '{frozen_row[frozen_key]}'")
-        if mismatches:
-            buckets["malformed"].append({**detail, "reason": "; ".join(mismatches)})
+        if resolved_eid in resolved_seen:
+            buckets["duplicate"].append({**detail, "reason": f"Resolves to the same current evidence_id ({resolved_eid}) as an earlier row in this CSV."})
+            continue
+        resolved_seen.add(resolved_eid)
+
+        status_note = None
+        if "machine_status" in df.columns:
+            csv_status = row.get("machine_status")
+            if pd.notna(csv_status) and resolved_status is not None and str(csv_status) != resolved_status:
+                status_note = f"Extractor status changed since this was labeled (was {csv_status}, now {resolved_status})."
+
+        if resolved_eid not in frozen:
+            buckets["outside_current_sample"].append({
+                **detail,
+                "reason": f"Matched via {match_source} to evidence_id {resolved_eid} — real historical evidence, "
+                          "but not part of the current 340-row locked sample. " + (status_note or ""),
+            })
             continue
 
-        prior = existing.get(eid)
+        detail["resolved_evidence_id"] = resolved_eid
+        detail["match_source"] = match_source
+        if status_note:
+            detail["note"] = status_note
+
+        prior = existing.get(resolved_eid)
         if prior and prior["human_label"] is not None:
             if prior["human_label"] == label:
                 buckets["identical"].append(detail)
-                to_write.append((eid, label, note))
+                to_write.append((resolved_eid, label, note))
             else:
                 detail["existing_label"] = prior["human_label"]
                 buckets["conflict"].append(detail)
                 if overwrite_conflicts:
-                    to_write.append((eid, label, note))
+                    to_write.append((resolved_eid, label, note))
         else:
             buckets["importable"].append(detail)
-            to_write.append((eid, label, note))
+            to_write.append((resolved_eid, label, note))
 
     written = 0
     if not dry_run:
-        for eid, label, note in to_write:
-            save_human_validation(eid, label, note)
+        for wr_eid, wr_label, wr_note in to_write:
+            save_human_validation(wr_eid, wr_label, wr_note)
             written += 1
 
     return {

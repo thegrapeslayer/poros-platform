@@ -22,9 +22,9 @@ const IMPORT_BUCKET_LABELS: Record<string, string> = {
   importable: "New — will be restored",
   identical: "Already matches saved label — no-op",
   conflict: "Conflicts with a different saved label",
-  duplicate: "Duplicate evidence_id within this CSV",
-  unmatched: "Not part of the current frozen sample",
-  malformed: "Doesn't match the frozen sample's own data",
+  duplicate: "Resolves to the same row as another line in this CSV",
+  unmatched: "No matching evidence found at all",
+  outside_current_sample: "Real evidence, but outside the current 340-row sample",
   invalid_label: "Invalid human_label value",
 };
 
@@ -302,14 +302,14 @@ export default function ValidationPage() {
                 ))}
             </div>
 
-            {(importResult.counts.malformed > 0 ||
-              importResult.counts.unmatched > 0 ||
+            {(importResult.counts.unmatched > 0 ||
+              importResult.counts.outside_current_sample > 0 ||
               importResult.counts.duplicate > 0 ||
               importResult.counts.invalid_label > 0) && (
               <details className="text-xs text-rose mb-3">
                 <summary className="cursor-pointer">Rows that will NOT be imported — details</summary>
                 <div className="mt-2 space-y-1 max-h-56 overflow-auto">
-                  {(["malformed", "unmatched", "duplicate", "invalid_label"] as const).map((bucket) =>
+                  {(["unmatched", "outside_current_sample", "duplicate", "invalid_label"] as const).map((bucket) =>
                     (importResult.examples?.[bucket] || []).map((ex, i) => (
                       <p key={`${bucket}-${i}`} className="font-mono">
                         [{bucket}] evidence_id={ex.evidence_id}: {ex.reason}

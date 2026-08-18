@@ -15,6 +15,42 @@ Format: newest first. `[Type]` one of `Docs`, `Fix`, `Feature`, `Rebrand`, `Data
 
 ---
 
+## 2026-08-18 — [Fix] CSV import: evidence_id isn't portable across database instances
+
+The project owner's real 340-label CSV failed to import — 332 `unmatched`, 8 `malformed`,
+0 written. Diagnosed directly against the live database: `evidence_id` is a plain SQLite
+`AUTOINCREMENT` surrogate key, generated fresh by row-insertion order. Two independent
+pipeline runs over the identical 100-disease cohort — e.g. the owner's own local instance
+vs. the one this session was testing against — produce the same evidence *content*
+(confirmed: spot-checked three of the "malformed" rows' claimed disease+feature pairs
+against the current database and found identical classifications, just filed under
+different evidence_id numbers) but completely different id numbering. The CSV import
+built two turns ago only ever tried an exact `evidence_id` match, so a CSV from any other
+instance than the one currently running would fail wholesale — exactly what happened.
+
+Fixed in `import_validation_csv()`: added a fallback match on the natural key
+`(disease, feature_id)` against the *full* 1,700-row historical evidence pool (not just
+the 340 currently sampled) whenever the literal `evidence_id` doesn't resolve, via a new
+`_historical_evidence_lookup()`. A row that resolves via either method but isn't part of
+the *current* 340-row locked sample is now its own bucket, `outside_current_sample` —
+reported, never written, and the sample is never expanded to fit it. If the CSV's
+recorded `machine_status` no longer matches the extractor's current classification for
+that row, an advisory note is attached (imported anyway, but visibly flagged). Dropped
+the old strict field-by-field `malformed` cross-check entirely — it was really just
+detecting this same root cause and failing hard instead of falling back.
+
+Verified with two new scripted scenarios against the real API: (1) labeled real rows,
+exported, rewrote every evidence_id in the CSV to nonexistent fake numbers while leaving
+disease/feature_id/status untouched (simulating a CSV from a different instance) —
+correctly resolved all of them via the `(disease, feature_id)` fallback and imported
+successfully, metrics recomputed correctly; (2) a labeled row for evidence that exists
+historically but isn't in the current locked sample — correctly classified as
+`outside_current_sample`, not silently imported. Confirmed `feature_evidence.reviewed`
+back at 0 and test audit files cleaned up afterward. No extraction, scoring, or frozen
+evidence touched.
+
+---
+
 ## 2026-08-18 — [Feature] CSV import/restore for completed validation labels
 
 Added a way to recover human validation labels from a previously exported CSV — e.g.

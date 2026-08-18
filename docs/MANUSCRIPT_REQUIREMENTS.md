@@ -113,23 +113,34 @@ in the live database, never to `scores`, `feature_values`, or any exported bundl
     whenever `export_manuscript_bundle()` runs — whatever's been reviewed at export time,
     possibly nothing, is included; it never blocks or alters the rest of the bundle.
 11. **Recovering lost review state**: if application state is lost before the export step
-    (e.g. browser/session reset), and a previously exported `validation_labels.csv` still
-    exists, the "Restore from CSV" section on the same page (or
-    `POST /api/research/validation-import`) re-applies it. Matched on the CSV's own
-    `evidence_id` column against the **current** frozen sample (recomputed fresh on every
-    import call, never cached) — a row only restores if that `evidence_id` is still part
-    of the locked 340-row sample and, where the CSV also carries `feature_id`/`disease`/
-    `snapshot_date`/`machine_status`, those match what's actually on file for it.
-    **Always dry-runs first** (`dry_run=true`, the default) — returns a classification
-    report (`importable`/`identical`/`conflict`/`duplicate`/`unmatched`/`malformed`/
+    (e.g. browser/session reset, or the labeling was done against a *different* backend
+    instance/database than the one now running), and a previously exported
+    `validation_labels.csv` still exists, the "Restore from CSV" section on the same page
+    (or `POST /api/research/validation-import`) re-applies it. Matching is two-tiered
+    because `evidence_id` is an autoincrement surrogate key, **not portable across
+    separate database instances** — two independent pipeline runs over the same cohort
+    produce the same evidence *content* but different row-insertion order, hence
+    different evidence_id numbers:
+      1. Try the CSV's own `evidence_id` against the current frozen sample directly.
+      2. If that doesn't resolve, fall back to the natural key — `(disease, feature_id)`
+         — against the *full* historical evidence pool (1,700 rows, not just the 340
+         sampled), and use whichever evidence_id *currently* represents that same
+         conceptual decision.
+    A row that resolves (either way) but isn't part of the *current* 340-row locked
+    sample is reported as `outside_current_sample` and never written — the sample itself
+    is never re-drawn or expanded to accommodate it. **Always dry-runs first**
+    (`dry_run=true`, the default) — returns a classification report (`importable`/
+    `identical`/`conflict`/`duplicate`/`unmatched`/`outside_current_sample`/
     `invalid_label`) without writing anything; only a second call with `dry_run=false`
-    writes. A row whose evidence_id already has a *different* saved label is a
+    writes. A row whose resolved evidence_id already has a *different* saved label is a
     `conflict` and is left untouched unless `overwrite_conflicts=true` is explicitly
-    passed. Writes go through the exact same `save_human_validation()` path a normal
-    label click uses — nothing outside `feature_evidence.reviewed`/`human_label`/
-    `human_note` is ever touched, and the sample itself is never re-drawn. Every
-    uploaded file, whether accepted or rejected, is preserved verbatim under
-    `backend/app/data/exports/validation_imports/` as an audit artifact.
+    passed. If the CSV's recorded `machine_status` differs from the extractor's current
+    classification for that row, an advisory note is attached (still imported — the
+    human's judgment may still be valid — but visibly flagged, not silently accepted).
+    Writes go through the exact same `save_human_validation()` path a normal label click
+    uses — nothing outside `feature_evidence.reviewed`/`human_label`/`human_note` is ever
+    touched. Every uploaded file, whether accepted or rejected, is preserved verbatim
+    under `backend/app/data/exports/validation_imports/` as an audit artifact.
 
 ## The frozen bundle — current authoritative version
 
