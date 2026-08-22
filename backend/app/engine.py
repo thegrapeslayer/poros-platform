@@ -2323,9 +2323,25 @@ def import_validation_csv(
         resolved_status: str | None = None
         match_source: str | None = None
 
+        # A direct evidence_id hit is only trusted if the CSV's own claimed
+        # disease/feature_id (when present) actually agree with what that id
+        # currently represents. evidence_id is a reshuffle-prone surrogate key
+        # (see module docstring above) — an id existing in the frozen sample does
+        # NOT by itself mean it still means what the CSV thinks it means. A prior
+        # version of this function trusted a direct hit unconditionally, which
+        # silently attached a real reviewer's label to the wrong disease/feature
+        # whenever ids had drifted; caught via a duplicate-collision case in
+        # practice, but content mismatches without a collision would have gone
+        # undetected. Falling through to the natural-key path on any mismatch
+        # instead of accepting a blind numeric coincidence.
         frozen_row = frozen.get(eid) if eid is not None else None
         if frozen_row is not None:
-            resolved_eid, resolved_status, match_source = eid, frozen_row["status"], "evidence_id"
+            csv_disease = row.get("disease") if "disease" in df.columns else None
+            csv_feature = row.get("feature_id") if "feature_id" in df.columns else None
+            disease_ok = pd.isna(csv_disease) or str(csv_disease).strip().lower() == str(frozen_row["Disease"]).strip().lower()
+            feature_ok = pd.isna(csv_feature) or str(csv_feature) == str(frozen_row["feature_id"])
+            if disease_ok and feature_ok:
+                resolved_eid, resolved_status, match_source = eid, frozen_row["status"], "evidence_id"
 
         if resolved_eid is None and can_fallback:
             csv_disease = row.get("disease")
