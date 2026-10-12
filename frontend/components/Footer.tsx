@@ -1,12 +1,17 @@
+import Link from "next/link";
+
 export default function Footer() {
   return (
-    <footer className="border-t hairline mt-24">
-      <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col sm:flex-row justify-between gap-4 text-sm text-muted">
-        <p className="max-w-xl">
-          POROS reports evidence coverage and ascertainment status, not certainty. Failure to
-          retrieve qualifying evidence for a disease is not proof that it doesn&rsquo;t exist.
-        </p>
-        <p className="font-mono text-xs">POROS engine · model TRS_v3_empirical</p>
+    <footer className="mt-12 border-t border-line/70 bg-white/35">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+        <div>
+          <p className="text-sm font-semibold tracking-tight text-ink">POROS</p>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-muted">Evidence mapping for rare disease translation. Scores describe evidence found in public sources; they are not clinical advice or a judgment of disease severity.</p>
+        </div>
+        <div className="flex shrink-0 gap-5 text-xs font-medium text-sage-dark">
+          <Link href="/methodology" className="hover:underline">Scoring approach</Link>
+          <Link href="/diseases" className="hover:underline">Portfolio</Link>
+        </div>
       </div>
     </footer>
   );

@@ -8,12 +8,18 @@ what they mean for the site/data/methodology, for someone who won't read every d
 [CLAUDE.md](../CLAUDE.md#keeping-this-documentation-current). A "meaningful" change is
 anything that would confuse a future session if it only showed up in `git log`: scoring
 math, feature/rule changes, API contract changes, routing changes, or a doc-worthy bug fix.
-Routine formatting/typo fixes don't need an entry.
 
 Format: newest first. `[Type]` one of `Docs`, `Fix`, `Feature`, `Rebrand`, `Data`,
 `Methodology`.
 
+## 2026-10-11 — [Feature] POROS product experience redesign
+
+Recentered the public website on the disease exploration workflow. The homepage now provides a live portfolio overview, a risk distribution based only on scored API data, direct disease search, and clear paths into profiles, comparisons, and the scoring explainer. Disease browsing now has accessible name search and risk filters, with coverage context and a clearer refresh status. Comparison selection is searchable and limited to four diseases, and charts are labeled with risk direction and evidence context. Disease profiles now lead with score, evidence coverage, domain risk, potential friction points, and source traceability.
+
+Removed the manuscript pipeline and operator-facing research pages, navigation links, and corresponding frontend API wrappers. Research backend functionality and scoring rules were left intact. The redesign uses system typography, responsive layouts, visible keyboard focus, reduced-motion support, and live empty/error states; it does not introduce sample scores or change the scientific model.
+
 ---
+
 
 ## 2026-08-18 — [Fix] CSV import: evidence_id isn't portable across database instances
 
