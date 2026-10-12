@@ -1,33 +1,14 @@
 # Current Status
 
-Last updated: 2026-08-14, by a Claude Code "scientific freeze" pass: ran and archived a
-real, complete manuscript dataset (100/100 diseases, 0 errors, current extractor v3.1 —
-see [MANUSCRIPT_REQUIREMENTS.md](MANUSCRIPT_REQUIREMENTS.md#the-frozen-bundle--current-authoritative-version)),
-added per-feature extractor-validation metrics (precision/recall/F1/confusion
-matrix/Cohen's κ, not just pooled) and stratified validation sampling so a
-per-feature breakdown is actually reportable, and generated a submission-ready
-variable-disposition supplement CSV. **The human-labeling half of extractor validation
-is still not done** — the metrics/sampling infrastructure is real and tested, but no
-person has gone through `/research/validation` yet; see "Implemented but incomplete"
-below. Builds on a "Tier 1" pass (real 100-disease *current-snapshot* data refresh, Data
-Provenance section, first-draft variable disposition, Validated Cohort labeling,
-per-feature evidence provenance on disease pages) and two earlier passes (initial
-audit/documentation, then a product-fix pass: comparison bug, empty-state clarity,
-RDTI→POROS rebrand, "Type A"/"Type B" jargon, manuscript pipeline explainer,
-diseases/portfolio merge, per-disease scoring, risk-scale clarity) — see
-[CHANGELOG.md](CHANGELOG.md) for the full list across all passes.
+Last updated: 2026-10-11 — POROS public product-interface redesign and removal of manuscript/research UI surfaces.
 
-**A large product-pivot request (ASSESS/DIAGNOSE/ACT/SIMULATE/VALIDATE/SHARE — a
-decision-support layer on top of the scoring engine) has been received but deliberately
-not started** — it's being scoped as a plan first, per the project owner's own request to
-"show me a concise implementation plan" before changes, and because it's large enough to
-warrant a checkpoint after this scientific-freeze work rather than context-switching
-mid-stream. See the bottom of this file once that plan exists (or ask — it may not have
-landed in this file yet if the plan is still being written in the same conversation).
+The public experience is centered on the disease portfolio: discover diseases, compare translation-risk domains, and inspect evidence provenance. The manuscript pipeline and operator-facing research pages have been removed from the frontend. Their research engine and backend API code remain unchanged in the repository; the frontend no longer links to those routes. Scoring logic and frozen model rules were not changed.
 
-**Update this file after any meaningful change** — see
-[CLAUDE.md](../CLAUDE.md#keeping-this-documentation-current). Stale status docs are worse
-than no status docs.
+The current production API has diseases in the portfolio but may have no current scored snapshots. The interface now makes that state explicit and provides a portfolio update path rather than displaying empty result visuals as if they were findings.
+
+**Current interface scope:** home portfolio overview, disease search and risk filters, disease profiles with evidence traceability, side-by-side comparison, and an accessible explanation of the scoring framework. The frontend uses live API responses and does not fabricate scores.
+
+**Update this file after any meaningful change** — see [CLAUDE.md](../CLAUDE.md#keeping-this-documentation-current).
 
 ## Implemented and working
 
@@ -41,9 +22,7 @@ than no status docs.
   typed client (`lib/api.ts`), disease slugs are generated and reversed entirely
   server-side so there's no frontend/backend slug drift, `disease/[slug]/page.tsx`
   already handles a missing/failed lookup gracefully via `notFound()`.
-- `/research/*` operator section: pipeline run/status, dataset + predictive stats,
-  validation/QA with Cohen's κ, single/ranked/cohort-wide counterfactuals, bundle export
-  — all fully wired to real backend endpoints, not mocked.
+- Public manuscript pipeline and research operator pages have been removed from the frontend. The research engine and API remain in the repository and are not linked from the public navigation.
 - A real prior manuscript pipeline run exists and is committed: `../Manuscript Bundle/`
   (40 diseases, real evidence, real figures) — proof the pipeline works end-to-end given
   network access, even though this specific sandbox can't demonstrate that live.
