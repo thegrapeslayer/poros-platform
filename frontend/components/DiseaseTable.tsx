@@ -34,7 +34,7 @@ export default function DiseaseTable({ diseases }: { diseases: DiseaseSummary[] 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[36rem] border-collapse text-sm">
           <caption className="sr-only">POROS rare disease portfolio with translation risk scores</caption>
-          <thead className="bg-[#f3f5ef] text-left text-[10px] font-semibold uppercase tracking-[.13em] text-muted"><tr><th scope="col" className="px-5 py-3.5">Disease</th><th scope="col" className="px-5 py-3.5">Risk band</th><th scope="col" className="px-5 py-3.5 text-right">Translation risk</th><th scope="col" className="w-14 px-5 py-3.5" aria-label="Open profile" /></tr></thead>
+          <thead className="bg-[#f5f5f7] text-left text-[10px] font-semibold uppercase tracking-[.13em] text-muted"><tr><th scope="col" className="px-5 py-3.5">Disease</th><th scope="col" className="px-5 py-3.5">Risk band</th><th scope="col" className="px-5 py-3.5 text-right">Translation risk</th><th scope="col" className="w-14 px-5 py-3.5" aria-label="Open profile" /></tr></thead>
           <tbody>{filtered.map((d) => <tr key={d.slug} className="border-t border-line/60 transition-colors hover:bg-sage-soft/25">
             <th scope="row" className="px-5 py-4 text-left font-semibold text-ink"><Link href={`/disease/${d.slug}`} className="rounded-sm hover:text-sage-dark hover:underline">{d.name}</Link><span className="mt-1 block text-[11px] font-normal text-muted">{d.trs == null ? "Evidence snapshot not scored" : `Evidence coverage ${d.evidence_coverage ?? "—"}${d.evidence_coverage != null ? "%" : ""}`}</span></th>
             <td className="px-5 py-4"><RiskBadge band={d.risk_band} /></td>
@@ -47,3 +47,4 @@ export default function DiseaseTable({ diseases }: { diseases: DiseaseSummary[] 
     </div>
   </section>;
 }
+

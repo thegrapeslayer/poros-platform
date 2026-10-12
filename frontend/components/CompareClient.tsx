@@ -5,12 +5,12 @@ import { compareDiseases, type DiseaseSummary } from "@/lib/api";
 import RiskBadge from "./RiskBadge";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
-const COLORS = ["#54745b", "#b47c44", "#ad6555", "#6684a1"];
+const COLORS = ["#4567e8", "#b47c44", "#9259d4", "#18877f"];
 const DOMAIN_ORDER = ["biological", "clinical", "regulatory", "economic", "infrastructure"];
 const DOMAIN_LABELS: Record<string, string> = { biological: "Biological", clinical: "Clinical", regulatory: "Regulatory", economic: "Economic", infrastructure: "Infrastructure" };
 
-export default function CompareClient({ options }: { options: { name: string; slug: string }[] }) {
-  const [selected, setSelected] = useState<string[]>([]);
+export default function CompareClient({ options, initialSelected = [] }: { options: { name: string; slug: string }[]; initialSelected?: string[] }) {
+  const [selected, setSelected] = useState<string[]>(initialSelected);
   const [results, setResults] = useState<DiseaseSummary[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,7 +41,7 @@ export default function CompareClient({ options }: { options: { name: string; sl
         <span className="rounded-full bg-sage-soft px-3 py-1.5 text-xs font-semibold text-sage-dark">{selected.length} / 4 selected</span>
       </div>
       <div className="mt-5 flex flex-wrap gap-2" aria-live="polite">
-        {selected.map((name) => <button key={name} type="button" onClick={() => toggle(name)} className="inline-flex min-h-9 items-center gap-2 rounded-full border border-sage/25 bg-sage-soft/75 px-3.5 text-sm font-medium text-sage-dark hover:bg-sage-soft" aria-label={`Remove ${name}`}>
+        {selected.map((name) => <button key={name} type="button" disabled={loading} onClick={() => toggle(name)} className="inline-flex min-h-9 items-center gap-2 rounded-full border border-sage/25 bg-sage-soft/75 px-3.5 text-sm font-medium text-sage-dark hover:bg-sage-soft" aria-label={`Remove ${name}`}>
           {name}<span aria-hidden="true" className="text-base leading-none">×</span>
         </button>)}
         {!selected.length && <p className="text-sm text-muted">Selected diseases will appear here.</p>}
@@ -51,7 +51,7 @@ export default function CompareClient({ options }: { options: { name: string; sl
           <label htmlFor="compare-search" className="mb-2 block text-xs font-semibold text-ink/70">Add a disease</label>
           <input id="compare-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Type a disease name…" className="min-h-12 w-full rounded-xl border border-line bg-white px-4 text-sm outline-none transition-shadow placeholder:text-muted/75 focus:border-sage focus:ring-4 focus:ring-sage/10" />
           <div className="mt-2 flex flex-wrap gap-2" aria-live="polite">
-            {matches.map((option) => <button key={option.slug} type="button" onClick={() => { toggle(option.name); setQuery(""); }} disabled={selected.length >= 4} className="min-h-9 rounded-full border border-line bg-white px-3.5 text-xs font-medium text-ink/75 transition-colors hover:border-sage/50 hover:bg-sage-soft/45 disabled:cursor-not-allowed disabled:opacity-45">+ {option.name}</button>)}
+            {matches.map((option) => <button key={option.slug} type="button" onClick={() => { toggle(option.name); setQuery(""); }} disabled={loading || selected.length >= 4} className="min-h-9 rounded-full border border-line bg-white px-3.5 text-xs font-medium text-ink/75 transition-colors hover:border-sage/50 hover:bg-sage-soft/45 disabled:cursor-not-allowed disabled:opacity-45">+ {option.name}</button>)}
             {query && matches.length === 0 && <p className="py-2 text-xs text-muted">No additional matches.</p>}
           </div>
         </div>
@@ -72,7 +72,7 @@ export default function CompareClient({ options }: { options: { name: string; sl
         <div className="min-h-[23rem] rounded-3xl border border-line/70 bg-white/80 p-3 sm:p-5">
           {scored.length ? <div className="h-[22rem]" role="img" aria-label="Radar chart comparing domain risk, where higher values indicate more risk">
             <ResponsiveContainer width="100%" height="100%"><RadarChart data={chartData} outerRadius="72%">
-              <PolarGrid stroke="#dce2d9" /><PolarAngleAxis dataKey="domain" tick={{ fontSize: 11, fill: "#59645a" }} /><PolarRadiusAxis domain={[0,100]} tick={{ fontSize: 9, fill: "#6d7268" }} />
+              <PolarGrid stroke="#dedee7" /><PolarAngleAxis dataKey="domain" tick={{ fontSize: 11, fill: "#646675" }} /><PolarRadiusAxis domain={[0,100]} tick={{ fontSize: 9, fill: "#646675" }} />
               {scored.map((result, index) => <Radar key={result.slug} name={result.name} dataKey={result.name} stroke={COLORS[results.indexOf(result) % COLORS.length]} fill={COLORS[results.indexOf(result) % COLORS.length]} fillOpacity={.13} connectNulls={false} />)}
               <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} /><Tooltip />
             </RadarChart></ResponsiveContainer>
@@ -84,3 +84,4 @@ export default function CompareClient({ options }: { options: { name: string; sl
     </section> : <div className="mt-6 rounded-2xl border border-dashed border-line px-5 py-7 text-center text-sm text-muted">Choose diseases above to create a side-by-side evidence view.</div>}
   </div>;
 }
+

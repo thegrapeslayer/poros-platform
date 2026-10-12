@@ -8,8 +8,10 @@ export const metadata: Metadata = {
   description: "Explore public evidence on where rare disease translation is progressing and where it may be getting stuck.",
   icons: { icon: "/favicon.svg" },
   applicationName: "POROS",
-  themeColor: "#f8f8f3",
+
 };
+
+export const viewport = { themeColor: "#f5f5f7" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,3 +25,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
+

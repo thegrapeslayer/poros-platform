@@ -12,20 +12,20 @@ export default function PorosLogo({ compact = false, className = "" }: PorosLogo
         <path
           d="M88 30 C50 34 28 60 28 96 C28 132 50 158 88 162"
           fill="none"
-          stroke="#465C4C"
+          stroke="#4567e8"
           strokeWidth="18"
           strokeLinecap="round"
         />
         <path
           d="M104 30 C142 34 164 60 164 96 C164 132 142 158 104 162"
           fill="none"
-          stroke="#465C4C"
+          stroke="#4567e8"
           strokeWidth="18"
           strokeLinecap="round"
         />
-        <path d="M96 40 L96 152" fill="none" stroke="#AB8A52" strokeWidth="8" strokeLinecap="round" />
-        <circle cx="96" cy="40" r="5.5" fill="#AB8A52" />
-        <circle cx="96" cy="152" r="5.5" fill="#AB8A52" />
+        <path d="M96 40 L96 152" fill="none" stroke="#9259d4" strokeWidth="8" strokeLinecap="round" />
+        <circle cx="96" cy="40" r="5.5" fill="#9259d4" />
+        <circle cx="96" cy="152" r="5.5" fill="#9259d4" />
       </svg>
 
       <span className="leading-none">
@@ -37,3 +37,4 @@ export default function PorosLogo({ compact = false, className = "" }: PorosLogo
     </Link>
   );
 }
+

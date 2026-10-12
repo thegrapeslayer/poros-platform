@@ -60,14 +60,14 @@ export default async function MethodologyPage() {
     </section>
 
     <section className="mt-14 grid gap-5 lg:grid-cols-[1fr_1.15fr]">
-      <div className="rounded-3xl bg-[#26382c] p-6 text-white sm:p-8">
+      <div className="rounded-3xl bg-[#202a50] p-6 text-white sm:p-8">
         <p className="eyebrow text-white/55">Reading a score</p>
         <h2 className="mt-3 text-2xl font-semibold tracking-tight">Higher means more translation risk.</h2>
         <p className="mt-3 text-sm leading-6 text-white/70">The Translation Risk Score is on a 0–100 scale. It is an evidence summary relative to the POROS cohort, not a measure of disease severity, research quality, or clinical prognosis.</p>
         <div className="mt-6 grid grid-cols-3 gap-2 text-center">
-          <Band label="Low" range="0–32" tone="bg-[#a8c7a3]" />
-          <Band label="Moderate" range="33–65" tone="bg-[#d5b478]" />
-          <Band label="High" range="66–100" tone="bg-[#d58a71]" />
+          <Band label="Low" range="0–32" tone="bg-[#a9baff]" />
+          <Band label="Moderate" range="33–65" tone="bg-[#e4bd78]" />
+          <Band label="High" range="66–100" tone="bg-[#e99aaa]" />
         </div>
       </div>
       <div className="rounded-3xl border border-line/70 bg-white/70 p-6 sm:p-8">
@@ -96,3 +96,4 @@ function SummaryCard({ number, title, text }: { number: string; title: string; t
 function Band({ label, range, tone }: { label: string; range: string; tone: string }) {
   return <div className="rounded-xl bg-white/10 px-2 py-3"><span className={`mx-auto block h-1 w-6 rounded-full ${tone}`} /><p className="mt-2 text-xs font-medium">{label}</p><p className="mt-1 text-[10px] text-white/55">{range}</p></div>;
 }
+

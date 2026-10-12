@@ -25,7 +25,7 @@ export default async function DiseasesPage() {
       </div>
     </div>
     {apiError && <div role="status" className="mb-6 rounded-2xl border border-gold/30 bg-gold-soft/60 p-4 text-sm text-ink/80">POROS can&rsquo;t reach its data service. Check that the backend is running and connected, then reload this page.</div>}
-    {!apiError && unscoredCount > 0 && <div className="mb-6"><PortfolioRefresh unscoredCount={unscoredCount} /></div>}
+    {!apiError && <div className="mb-6"><PortfolioRefresh unscoredCount={unscoredCount} /></div>}
     <DiseaseTable diseases={diseases} />
   </div>;
 }
@@ -33,3 +33,4 @@ export default async function DiseasesPage() {
 function PortfolioStat({ label, value }: { label: string; value: number | string }) {
   return <div className="min-w-[6rem] rounded-2xl border border-line/70 bg-white/60 px-4 py-3"><p className="text-[10px] font-medium uppercase tracking-[.12em] text-muted">{label}</p><p className="mt-1 text-xl font-semibold tabular-nums text-ink">{value}</p></div>;
 }
+

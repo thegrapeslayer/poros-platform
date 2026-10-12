@@ -36,7 +36,7 @@ export default function EvidenceSection({
   breakdown: Record<string, FeatureRow[]>;
   provenance: ProvenanceRow[];
 }) {
-  const sources = groupProvenanceSummary(provenance);
+  const sources = groupProvenanceSummary(provenance, breakdown);
   const byFeature = groupByFeature(provenance);
 
   return (
@@ -146,9 +146,9 @@ function groupByFeature(rows: ProvenanceRow[]): Record<string, ProvenanceRow[]> 
   return out;
 }
 
-function groupProvenanceSummary(rows: ProvenanceRow[]) {
+function groupProvenanceSummary(rows: ProvenanceRow[], breakdown: Record<string, FeatureRow[]>) {
   const typeA = rows.filter((r) => r.Type === "A");
-  const typeB = rows.filter((r) => r.Type === "B");
+  const typeB = Object.values(breakdown).flat().filter((r) => r.type === "B");
   const out: { label: string; summary: string }[] = [];
   if (typeA.length) {
     out.push({
@@ -157,7 +157,7 @@ function groupProvenanceSummary(rows: ProvenanceRow[]) {
     });
   }
   if (typeB.length) {
-    const confirmed = typeB.filter((r) => String(r.Value).includes("CONFIRMED")).length;
+    const confirmed = typeB.filter((r) => r.status === "CONFIRMED_PRESENT").length;
     out.push({
       label: "Literature (Europe PMC / PubMed)",
       summary: `${typeB.length} documentary feature${typeB.length === 1 ? "" : "s"} checked, ${confirmed} confirmed present.`,
@@ -165,3 +165,4 @@ function groupProvenanceSummary(rows: ProvenanceRow[]) {
   }
   return out;
 }
+

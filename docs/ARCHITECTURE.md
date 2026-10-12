@@ -27,11 +27,10 @@ poros-platform/
     │   ├── disease/[slug]/page.tsx     /disease/:slug — one disease's full profile
     │   ├── compare/page.tsx            /compare     — up to 4 diseases, radar chart
     │   ├── methodology/page.tsx        /methodology — domains/features, plain-language evidence types
-    │   ├── pipeline/page.tsx           /pipeline    — manuscript pipeline explainer (public-facing)
-    │   └── research/                   /research/*  — operator tools, see "Research namespace" below
+    │   └── workspace/page.tsx          /workspace   — saved diseases, domain heatmap and CSV export
     ├── components/               shared UI: Nav, Footer, DiseaseCard/Table, SearchBar,
     │                              DomainBars, RiskBadge, EvidenceSection, CompareClient,
-    │                              ScoreDiseaseButton, PortfolioRefresh, ResearchNav
+    │                              ScoreDiseaseButton, PortfolioRefresh, WorkspaceClient, EvidencePlanner
     └── lib/api.ts                 the only place that knows backend URLs/response shapes
 ```
 
@@ -171,3 +170,11 @@ outbound HTTPS required). `POST /api/admin/refresh` (and `/api/research/pipeline
 Research is kept) must be triggered after each deploy or on a schedule to populate/update
 data — the frontend itself is always a live passthrough to whatever the backend currently
 has scored, never a cache of old data.
+
+
+
+## Browser-local evidence workspace (2026-10-11)
+
+`lib/workspace.ts` manages versioned localStorage state for saved slugs, notes by disease, and personal review flags keyed by disease/snapshot/latest retrieval. Same-tab custom events and cross-tab storage events synchronize consumers. Storage failures are surfaced; edits can remain in memory for export. No patient records or user accounts are introduced.
+
+`/workspace` obtains portfolio data server-side; its client component filters and exports the visible rows, preserving null scores as blank cells and neutralizing spreadsheet formula prefixes. `/compare?diseases=slug1,slug2` validates slugs against the API portfolio and limits selection to four. `EvidencePlanner` derives verification tasks from unconfirmed/unascertained features without altering scores. JSON exports include full provenance and personal notes. UI review completion is explicitly distinct from scientific confirmation.

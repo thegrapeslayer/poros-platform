@@ -1,10 +1,12 @@
 # Current Status
 
-Last updated: 2026-10-11 — POROS public product-interface redesign and removal of manuscript/research UI surfaces.
+Last updated: 2026-10-11 — Evidence workspace, review plans, exports, and cobalt/porcelain interface.
 
 The public experience is centered on the disease portfolio: discover diseases, compare translation-risk domains, and inspect evidence provenance. The manuscript pipeline and operator-facing research pages have been removed from the frontend. Their research engine and backend API code remain unchanged in the repository; the frontend no longer links to those routes. Scoring logic and frozen model rules were not changed.
 
 The current production API has diseases in the portfolio but may have no current scored snapshots. The interface now makes that state explicit and provides a portfolio update path rather than displaying empty result visuals as if they were findings.
+
+**New evidence workflow:** `/workspace` offers saved diseases, a five-domain heatmap, search/ascertainment filters and CSV export. Profiles offer personal evidence-review checklists, notes, full JSON evidence briefs and print/PDF output. Saved selections open comparison through validated slug query parameters. Personal state is browser-local, with no cross-device sync; review flags never change scientific evidence or scores.
 
 **Current interface scope:** home portfolio overview, disease search and risk filters, disease profiles with evidence traceability, side-by-side comparison, and an accessible explanation of the scoring framework. The frontend uses live API responses and does not fabricate scores.
 
@@ -324,3 +326,4 @@ Per the audit instructions, these are surfaced rather than silently resolved:
    free-text resolution the backend already has. This materially changes how "disease not
    found" should be handled in the UI (see the routing gap above) and wasn't specified
    anywhere in the existing docs — flagged rather than assumed.
+

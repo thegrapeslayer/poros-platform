@@ -50,6 +50,7 @@ async function getJSON<T>(path: string, opts?: RequestInit): Promise<T> {
     ...opts,
     // Portfolio changes when an admin refresh runs; don't let Next cache stale scores.
     cache: "no-store",
+    signal: opts?.signal ?? AbortSignal.timeout(20000),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -130,3 +131,4 @@ export function getAdminRefreshStatus() {
 }
 
 export { API_BASE };
+

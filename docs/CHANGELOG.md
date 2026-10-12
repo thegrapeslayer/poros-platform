@@ -13,6 +13,12 @@ Routine formatting/typo fixes don't need an entry.
 Format: newest first. `[Type]` one of `Docs`, `Fix`, `Feature`, `Rebrand`, `Data`,
 `Methodology`.
 
+## 2026-10-11 — [Feature] Evidence workspace and review workflow
+
+Added browser-local saved diseases and notes, a live portfolio domain heatmap with filters and spreadsheet-safe CSV export, seeded shortlist comparison, and per-profile evidence-review plans for unconfirmed/unascertained records. JSON briefs preserve the full API profile, provenance, snapshot and personal notes; print styles support PDF export. New porcelain, graphite, cobalt and violet styling follows the supplied Apple interface guidance with responsive navigation, immediate pressed feedback, visible focus, and accessibility preferences.
+
+Fixed documentary evidence summaries to count distinct features with exact CONFIRMED_PRESENT status instead of matching the substring in NOT_CONFIRMED. Portfolio refresh now refreshes displayed server data after completion. API requests time out after 20 seconds. No scoring rules, cohort membership, evidence or backend endpoints changed.
+
 ## 2026-10-11 — [Feature] POROS product experience redesign
 
 Recentered the public website on the disease exploration workflow. The homepage now provides a live portfolio overview, a risk distribution based only on scored API data, direct disease search, and clear paths into profiles, comparisons, and the scoring explainer. Disease browsing now has accessible name search and risk filters, with coverage context and a clearer refresh status. Comparison selection is searchable and limited to four diseases, and charts are labeled with risk direction and evidence context. Disease profiles now lead with score, evidence coverage, domain risk, potential friction points, and source traceability.
@@ -421,3 +427,4 @@ and pushed to `github.com/thegrapeslayer/poros-platform` (`main`, commit `0d6af4
 
 *Earlier history (the `Add files via upload` / `Create *.tsx` commits before this log
 started) predates this changelog and isn't reconstructed here — see `git log` directly.*
+

@@ -4,15 +4,15 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        paper: "#f6f2ea",
-        paper2: "#efe7d8",
-        card: "#fffdf9",
-        ink: "#262d27",
-        muted: "#6d7268",
-        line: "#ddd2bd",
-        sage: { DEFAULT: "#6f8a76", dark: "#465c4c", soft: "#e6ede5" },
-        gold: { DEFAULT: "#ab8a52", soft: "#f1e8d4" },
-        rose: { DEFAULT: "#b06a55", soft: "#f3ded4" },
+        paper: "#f5f5f7",
+        paper2: "#eceef4",
+        card: "#ffffff",
+        ink: "#1d1d24",
+        muted: "#646675",
+        line: "#dedee7",
+        sage: { DEFAULT: "#4567e8", dark: "#304cc5", soft: "#edf0ff" },
+        gold: { DEFAULT: "#a76716", soft: "#fff4dd" },
+        rose: { DEFAULT: "#b74a61", soft: "#fff0f3" },
       },
       fontFamily: {
         display: ["var(--font-display)", "serif"],
@@ -23,3 +23,4 @@ module.exports = {
   },
   plugins: [],
 };
+

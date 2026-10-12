@@ -5,6 +5,8 @@ import RiskBadge from "@/components/RiskBadge";
 import DomainBars from "@/components/DomainBars";
 import EvidenceSection from "@/components/EvidenceSection";
 import ScoreDiseaseButton from "@/components/ScoreDiseaseButton";
+import SaveDisease from "@/components/SaveDisease";
+import EvidencePlanner from "@/components/EvidencePlanner";
 import CohortBadge from "@/components/CohortBadge";
 
 type FetchState =
@@ -38,7 +40,7 @@ export default async function DiseaseDetailPage({ params }: { params: { slug: st
       <h1 className="mt-4 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{state.name}</h1>
       <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted">This disease does not have a scored evidence snapshot yet. Start a score for this disease, or update the portfolio to populate more profiles.</p>
       <div className="mt-7 flex flex-col items-center justify-center gap-4 sm:flex-row">
-        <ScoreDiseaseButton name={state.name} label={`Score ${state.name}`} variant="primary" />
+        <SaveDisease slug={params.slug} /><ScoreDiseaseButton name={state.name} label={`Score ${state.name}`} variant="primary" />
         <Link href="/diseases" className="text-sm font-semibold text-sage-dark hover:underline">Browse all diseases →</Link>
       </div>
     </div>
@@ -59,11 +61,11 @@ export default async function DiseaseDetailPage({ params }: { params: { slug: st
     <Link href="/diseases" className="inline-flex items-center gap-2 text-xs font-medium text-muted transition-colors hover:text-sage-dark">← <span>All diseases</span></Link>
     <div className="mt-7 flex flex-wrap items-end justify-between gap-4 border-b border-line/70 pb-7">
       <div><p className="eyebrow text-sage-dark">Disease profile</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">{disease.name}</h1><div className="mt-3"><CohortBadge status="validated" /></div></div>
-      <div className="flex items-center gap-3"><RiskBadge band={disease.risk_band} /><Link href="/compare" className="inline-flex min-h-10 items-center rounded-full border border-line bg-white/65 px-4 text-xs font-semibold text-ink/75 transition-colors hover:bg-sage-soft/55">Compare profile ↗</Link></div>
+      <div className="flex items-center gap-3"><SaveDisease slug={disease.slug} /><RiskBadge band={disease.risk_band} /><Link href={`/compare?diseases=${encodeURIComponent(disease.slug)}`} className="inline-flex min-h-10 items-center rounded-full border border-line bg-white/65 px-4 text-xs font-semibold text-ink/75 transition-colors hover:bg-sage-soft/55">Compare profile ↗</Link></div>
     </div>
 
     <section className="mt-7 grid gap-4 lg:grid-cols-[.72fr_1.28fr]">
-      <div className="rounded-3xl bg-[#26382c] p-6 text-white sm:p-7">
+      <div className="rounded-3xl bg-[#202a50] p-6 text-white sm:p-7">
         <p className="eyebrow text-white/55">Translation risk score</p>
         <div className="mt-4 flex items-end gap-2"><p className="text-6xl font-semibold leading-none tracking-[-.05em] tabular-nums">{disease.trs != null ? disease.trs.toFixed(1) : "—"}</p><span className="pb-1 text-sm text-white/50">/ 100</span></div>
         <p className="mt-3 text-xs leading-5 text-white/60">Higher scores indicate more translation risk in the evidence available for this disease.</p>
@@ -83,6 +85,8 @@ export default async function DiseaseDetailPage({ params }: { params: { slug: st
       <ul className="grid gap-3 sm:grid-cols-2">{disease.primary_barriers.map((barrier) => <li key={barrier} className="flex items-start gap-3 rounded-2xl border border-rose/15 bg-rose-soft/30 px-4 py-3.5 text-sm leading-6 text-ink/80"><span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-rose" />{barrier}</li>)}</ul>
     </section>}
 
+    <EvidencePlanner disease={disease} />
     <section className="mt-12"><div className="mb-5"><p className="eyebrow text-muted">Source trail</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">Evidence behind the profile</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Open a domain and feature to follow its score back to source records. Unascertained values remain visible as unknown.</p></div><EvidenceSection breakdown={disease.domain_breakdown} provenance={disease.provenance} /></section>
   </div>;
 }
+

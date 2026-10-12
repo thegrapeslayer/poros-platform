@@ -37,7 +37,7 @@ export default async function HomePage() {
           <div className="grid items-center gap-12 lg:grid-cols-[1.12fr_.88fr]">
             <div className="relative z-10 max-w-2xl">
               <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3.5 py-2 text-xs font-medium text-white/80 backdrop-blur">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#b9d4b8]" />
+                <span className="h-1.5 w-1.5 rounded-full bg-[#b1bfff]" />
                 RARE DISEASE TRANSLATION INTELLIGENCE
               </div>
               <h1 className="max-w-2xl text-balance text-4xl font-semibold leading-[1.04] tracking-[-0.045em] text-white sm:text-5xl lg:text-[4.15rem]">
@@ -50,7 +50,7 @@ export default async function HomePage() {
                 <Link href="/diseases" className="button-light">
                   Explore the portfolio <span aria-hidden="true">↗</span>
                 </Link>
-                <Link href="/compare" className="button-glass">Compare diseases</Link>
+                <Link href="/workspace" className="button-glass">Open your workspace</Link>
               </div>
               <div className="mt-10 max-w-xl">
                 <label htmlFor="disease-search" className="mb-2 block text-xs font-medium tracking-wide text-white/65">
@@ -61,8 +61,8 @@ export default async function HomePage() {
             </div>
 
             <div className="relative mx-auto w-full max-w-[30rem]">
-              <div className="absolute -inset-8 rounded-full bg-[#b8c6a2]/10 blur-3xl" />
-              <div className="relative rounded-[1.65rem] border border-white/15 bg-[#f7f5ed]/[0.08] p-5 shadow-2xl backdrop-blur-xl sm:p-6">
+              <div className="absolute -inset-8 rounded-full bg-[#a5a8ff]/10 blur-3xl" />
+              <div className="relative rounded-[1.65rem] border border-white/15 bg-[#f3f4ff]/[0.08] p-5 shadow-2xl backdrop-blur-xl sm:p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-medium uppercase tracking-[.16em] text-white/55">Portfolio at a glance</p>
@@ -80,18 +80,18 @@ export default async function HomePage() {
                 </div>
                 <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-white/10" role="img" aria-label={`${counts.HIGH} high, ${counts.MODERATE} moderate, and ${counts.LOW} low risk diseases`}>
                   {scored.length > 0 && <>
-                    <span className="bg-[#d58a71]" style={{ width: `${counts.HIGH / scored.length * 100}%` }} />
-                    <span className="bg-[#d5b478]" style={{ width: `${counts.MODERATE / scored.length * 100}%` }} />
-                    <span className="bg-[#a8c7a3]" style={{ width: `${counts.LOW / scored.length * 100}%` }} />
+                    <span className="bg-[#e99aaa]" style={{ width: `${counts.HIGH / scored.length * 100}%` }} />
+                    <span className="bg-[#e4bd78]" style={{ width: `${counts.MODERATE / scored.length * 100}%` }} />
+                    <span className="bg-[#a9baff]" style={{ width: `${counts.LOW / scored.length * 100}%` }} />
                   </>}
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-3">
-                  <RiskCount label="High" value={counts.HIGH} color="bg-[#d58a71]" />
-                  <RiskCount label="Moderate" value={counts.MODERATE} color="bg-[#d5b478]" />
-                  <RiskCount label="Low" value={counts.LOW} color="bg-[#a8c7a3]" />
+                  <RiskCount label="High" value={counts.HIGH} color="bg-[#e99aaa]" />
+                  <RiskCount label="Moderate" value={counts.MODERATE} color="bg-[#e4bd78]" />
+                  <RiskCount label="Low" value={counts.LOW} color="bg-[#a9baff]" />
                 </div>
                 <p className="mt-6 flex items-center gap-2 text-xs text-white/45">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a8c7a3]" />
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a9baff]" />
                   {scored.length ? "Current scored portfolio" : "Scores appear here when the portfolio is scored"}
                 </p>
               </div>
@@ -136,7 +136,7 @@ export default async function HomePage() {
         <div className="grid gap-4 lg:grid-cols-3">
           <FeatureCard index="01" title="Find the friction" text="Scan risk across five translation domains, then open a disease profile to see which barriers shape its score." href="/diseases" link="Explore diseases" />
           <FeatureCard index="02" title="See what differs" text="Compare up to four diseases on one scale and spot where development pathways diverge." href="/compare" link="Open comparison" />
-          <FeatureCard index="03" title="Follow every signal" text="Trace a score from domain to feature to its public source, with coverage shown alongside risk." href="/methodology" link="How POROS works" />
+          <FeatureCard index="03" title="Turn questions into progress" text="Save diseases, review uncertain evidence, and export a source-backed brief with your meeting notes." href="/workspace" link="Build your workspace" />
         </div>
       </section>
 
@@ -164,3 +164,4 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
 function FeatureCard({ index, title, text, href, link }: { index: string; title: string; text: string; href: string; link: string }) {
   return <article className="feature-card rounded-3xl border border-line/70 bg-white/65 p-6 sm:p-7"><p className="text-xs font-medium tracking-[.18em] text-sage-dark">{index}</p><h3 className="mt-7 text-xl font-semibold tracking-tight text-ink">{title}</h3><p className="mt-2 min-h-[3.5rem] text-sm leading-6 text-muted">{text}</p><Link href={href} className="mt-6 inline-flex text-sm font-semibold text-sage-dark hover:underline">{link} <span className="ml-2" aria-hidden="true">→</span></Link></article>;
 }
+
