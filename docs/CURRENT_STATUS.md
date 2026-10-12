@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-11 — POROS public product-interface redesign and removal of manuscript/research UI surfaces.
 
-The public experience is centered on the disease portfolio: discover diseases, compare translation-risk domains, and inspect evidence provenance. The manuscript pipeline and operator-facing research pages have been removed from the frontend. Their research engine and backend API code remain in the repository for internal research workflows; scoring logic and frozen model rules were not changed.
+The public experience is centered on the disease portfolio: discover diseases, compare translation-risk domains, and inspect evidence provenance. The manuscript pipeline and operator-facing research pages have been removed from the frontend. Their research engine and backend API code remain unchanged in the repository; the frontend no longer links to those routes. Scoring logic and frozen model rules were not changed.
 
 The current production API has diseases in the portfolio but may have no current scored snapshots. The interface now makes that state explicit and provides a portfolio update path rather than displaying empty result visuals as if they were findings.
 
@@ -22,7 +22,7 @@ The current production API has diseases in the portfolio but may have no current
   typed client (`lib/api.ts`), disease slugs are generated and reversed entirely
   server-side so there's no frontend/backend slug drift, `disease/[slug]/page.tsx`
   already handles a missing/failed lookup gracefully via `notFound()`.
-- Public manuscript pipeline and research operator pages have been removed from the frontend. The research engine and API remain available for internal workflows; no manuscript tools are linked from the public navigation.
+- Public manuscript pipeline and research operator pages have been removed from the frontend. The research engine and API remain in the repository and are not linked from the public navigation.
 - A real prior manuscript pipeline run exists and is committed: `../Manuscript Bundle/`
   (40 diseases, real evidence, real figures) — proof the pipeline works end-to-end given
   network access, even though this specific sandbox can't demonstrate that live.
