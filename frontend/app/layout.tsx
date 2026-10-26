@@ -4,10 +4,10 @@ import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: { default: "RDTI | Rare Disease Research Decisions", template: "%s · RDTI" },
+  title: { default: "POROS | Rare Disease Research Decisions", template: "%s · POROS" },
   description: "Examine rare disease evidence, simulate hypothetical changes with the POROS model, and export a research action plan.",
   icons: { icon: "/favicon.svg" },
-  applicationName: "RDTI",
+  applicationName: "POROS",
 
 };
 

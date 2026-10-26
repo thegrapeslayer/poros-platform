@@ -24,7 +24,7 @@ def generate(profile,result,assumptions):
     styles['Title'].textColor=colors.HexColor('#202638');styles['Title'].alignment=0
     def clean(x):return escape(str(x if x is not None else 'Not assessed')).replace('\n','<br/>')
     def p(x,style='BodySmall'):return Paragraph(clean(x),styles[style])
-    story=[p('RDTI / POROS','Heading3'),p('Research action report','Title'),p(profile['name'],'Heading1'),p(f"{profile['mode'].title()} evidence | Cutoff / snapshot: {profile['snapshot']} | Last evidence update: {profile['last_updated']}"),p(f"Generated: {eng.now_iso()} | Model: {profile['model_version']} | Cohort: {profile['cohort_id']} ({profile['cohort_size']} diseases)"),p('For research-team discussion. Hypothetical changes are model inputs, not predicted effects of conducting a study.')]
+    story=[p('POROS','Heading3'),p('Research action report','Title'),p(profile['name'],'Heading1'),p(f"{profile['mode'].title()} evidence | Cutoff / snapshot: {profile['snapshot']} | Last evidence update: {profile['last_updated']}"),p(f"Generated: {eng.now_iso()} | Model: {profile['model_version']} | Cohort: {profile['cohort_id']} ({profile['cohort_size']} diseases)"),p('For research-team discussion. Hypothetical changes are model inputs, not predicted effects of conducting a study.')]
     def table(rows,widths):
         t=Table([[p(c) for c in row] for row in rows],colWidths=widths,repeatRows=1,hAlign='LEFT')
         t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#edf0f8')),('VALIGN',(0,0),(-1,-1),'TOP'),('LINEBELOW',(0,0),(-1,0),.6,colors.HexColor('#cdd3df')),('LINEBELOW',(0,1),(-1,-1),.3,colors.HexColor('#e3e6ec')),('TOPPADDING',(0,0),(-1,-1),7),('BOTTOMPADDING',(0,0),(-1,-1),5)]));story.append(t)
@@ -61,6 +61,6 @@ def generate(profile,result,assumptions):
     story += [p('Remaining uncertainties and limitations','Heading2')]+[p(s) for s in profile['warnings']+result['limitations']]
     story += [p(f"Archive database SHA-256: {profile['source_sha256']}",'SmallLink'),p(f"Reference fingerprint: {profile['reference_digest']}",'SmallLink'),p(f"Baseline fingerprint: {profile['baseline_token']}",'SmallLink')]
     def footer(canvas,doc):
-        canvas.setFont('RDTI',8);canvas.setFillColor(colors.HexColor('#626979'));canvas.drawString(42,25,'RDTI | Research discussion only');canvas.drawRightString(570,25,f'Page {doc.page}')
-    SimpleDocTemplate(stream,pagesize=(612,792),rightMargin=42,leftMargin=42,topMargin=38,bottomMargin=42,title=profile['name']+' research action report',author='RDTI / POROS').build(story,onFirstPage=footer,onLaterPages=footer)
+        canvas.setFont('RDTI',8);canvas.setFillColor(colors.HexColor('#626979'));canvas.drawString(42,25,'POROS | Research discussion only');canvas.drawRightString(570,25,f'Page {doc.page}')
+    SimpleDocTemplate(stream,pagesize=(612,792),rightMargin=42,leftMargin=42,topMargin=38,bottomMargin=42,title=profile['name']+' research action report',author='POROS').build(story,onFirstPage=footer,onLaterPages=footer)
     return stream.getvalue()

@@ -30,7 +30,7 @@ def profile(slug:str,mode:Mode='historical'):return call(decision.profile,slug,m
 @router.get('/data/{slug}')
 def data(slug:str,mode:Mode='historical'):
     p=call(decision.profile,slug,mode)
-    return Response(decision.eng.json_dumps(p),media_type='application/json',headers={'Content-Disposition':f'attachment; filename="rdti-{p["slug"]}-{mode}-evidence.json"'})
+    return Response(decision.eng.json_dumps(p),media_type='application/json',headers={'Content-Disposition':f'attachment; filename="poros-{p["slug"]}-{mode}-evidence.json"'})
 @router.post('/simulate/{slug}')
 def simulate(slug:str,req:Scenario):return call(decision.simulate,slug,req.mode,req.changes,req.baseline_token)
 @router.post('/report/{slug}')
@@ -39,4 +39,4 @@ def report(slug:str,req:Scenario):
     p=call(decision.profile,slug,req.mode)
     if p['baseline_token']!=result['baseline_token']:raise HTTPException(409,'Evidence changed during export. Reload and retry.')
     pdf=action_report.generate(p,result,req.assumptions.model_dump())
-    return Response(pdf,media_type='application/pdf',headers={'Content-Disposition':f'attachment; filename="rdti-{p["slug"]}-research-plan.pdf"'})
+    return Response(pdf,media_type='application/pdf',headers={'Content-Disposition':f'attachment; filename="poros-{p["slug"]}-research-plan.pdf"'})

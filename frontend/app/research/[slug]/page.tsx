@@ -1,0 +1,5 @@
+import Link from 'next/link';
+import {getProfile,evidenceMode} from '@/lib/decision';
+import ResearchWorkbench from '@/components/ResearchWorkbench';
+export const dynamic='force-dynamic';
+export default async function Disease({params,searchParams}:{params:{slug:string};searchParams:{mode?:string}}){const mode=evidenceMode(searchParams.mode);try{const profile=await getProfile(params.slug,mode);return <ResearchWorkbench key={`${params.slug}:${mode}:${profile.baseline_token}`} profile={profile}/>;}catch(e){return <div className="page-shell"><div className="surface p-8"><h1 className="text-2xl font-semibold">Research simulator is awaiting the backend update.</h1><p className="mt-3 text-sm leading-6 text-muted">The current disease explorer and scoring controls remain available. This optional simulator requires the latest evidence service deployment.</p><div className="mt-5 flex gap-3"><Link href={`/research/${params.slug}?mode=${mode}`} className="button-dark">Retry profile</Link><Link href="/diseases" className="control">Browse diseases</Link></div></div></div>;}}

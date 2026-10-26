@@ -1,6 +1,20 @@
-import Link from 'next/link';
-import {getCatalog,evidenceMode,DOMAINS,scoreText} from '@/lib/decision';
-export const dynamic='force-dynamic';
-export default async function Compare({searchParams}:{searchParams:{mode?:string;diseases?:string}}){const mode=evidenceMode(searchParams.mode);let catalog=null;try{catalog=await getCatalog(mode)}catch{}const ids=[...new Set((searchParams.diseases||'').split(','))].slice(0,4);const chosen=catalog?.diseases.filter(d=>ids.includes(d.slug))||[];
- return <div className="page-shell"><p className="eyebrow text-sage-dark">Side-by-side evidence</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">Compare research landscapes.</h1><p className="mt-4 text-sm text-muted">{mode==='historical'?'Historical POROS, cutoff December 31, 2015':'Current evidence explorer'}. All profiles use the same reference cohort and evidence mode.</p><Link className="control mt-5" href={`/diseases?mode=${mode}`}>Choose up to four diseases</Link>{!chosen.length?<div className="surface mt-8 p-8 text-muted">{catalog?'Select diseases with the comparison checkboxes in the explorer.':'The evidence service is unavailable. Please retry shortly.'}</div>:<div className="surface overflow-x-auto mt-8"><table className="evidence-table min-w-[700px]"><thead><tr><th>Assessment</th>{chosen.map(d=><th key={d.slug}><Link className="text-sage-dark" href={`/disease/${d.slug}?mode=${mode}`}>{d.name} ↗</Link></th>)}</tr></thead><tbody><tr><th>Overall readiness</th>{chosen.map(d=><td key={d.slug} className="text-2xl font-semibold">{scoreText(d.readiness)}</td>)}</tr><tr><th>Original TRS</th>{chosen.map(d=><td key={d.slug}>{scoreText(d.trs)}</td>)}</tr>{DOMAINS.map(domain=><tr key={domain}><th className="capitalize">{domain} readiness</th>{chosen.map(d=><td key={d.slug}>{scoreText(d.readiness_domains[domain])}</td>)}</tr>)}<tr><th>Inputs assessed</th>{chosen.map(d=><td key={d.slug}>{d.ascertainment_completeness??'Unknown'}%</td>)}</tr><tr><th>Documentary evidence supported</th>{chosen.map(d=><td key={d.slug}>{d.evidence_coverage??'Unknown'}%</td>)}</tr></tbody></table></div>}<p className="mt-5 text-xs leading-6 text-muted">Readiness is 100 minus risk, not a probability of clinical success. Unknown domains remain unscored. Differences in documentation do not establish differences in disease importance or the value of funding a study.</p></div>;
+import { listDiseases } from "@/lib/api";
+import CompareClient from "@/components/CompareClient";
+
+export const metadata = { title: "Compare diseases" };
+
+export default async function ComparePage({ searchParams }: { searchParams: { diseases?: string } }) {
+  let diseases: Awaited<ReturnType<typeof listDiseases>>["diseases"] = [];
+  let apiError = false;
+  try { diseases = (await listDiseases()).diseases; } catch { apiError = true; }
+  return <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
+    <div className="mb-8 max-w-3xl">
+      <p className="eyebrow text-sage-dark">Compare the landscape</p>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">See where pathways differ.</h1>
+      <p className="mt-3 text-sm leading-6 text-muted">Choose up to four diseases to compare translation risk across biology, clinical development, regulation, economics, and infrastructure.</p>
+    </div>
+    {apiError && <div role="status" className="mb-6 rounded-2xl border border-gold/30 bg-gold-soft/60 p-4 text-sm text-ink/80">POROS can&rsquo;t reach its data service right now. The comparison will work as soon as the backend connection is available.</div>}
+    <CompareClient initialSelected={(searchParams.diseases ?? "").split(",").filter((slug, i, all) => all.indexOf(slug) === i).map((slug) => diseases.find((d) => d.slug === slug)?.name).filter((name): name is string => Boolean(name)).slice(0, 4)} options={diseases.map((disease) => ({ name: disease.name, slug: disease.slug }))} />
+  </div>;
 }
+

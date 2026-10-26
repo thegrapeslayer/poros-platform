@@ -12,7 +12,7 @@ export type Result = {baseline:Assessment;scenario:Assessment;changes:{feature_i
 export const DOMAINS = ['biological','clinical','regulatory','economic','infrastructure'];
 export const STATES:Record<string,string>={assessed:'Structured value assessed',supporting:'Supporting evidence',not_found:'Evidence not found',not_assessed:'Not assessed',insufficient:'Criterion not satisfied',retrieval_failed:'Retrieval unsuccessful',conflicting:'Needs conflict review'};
 export const scoreText = (n:number|null|undefined)=> n==null?'Not scored':n.toFixed(1);
-export function evidenceMode(value?:string):Mode {return value==='current'?'current':'historical';}
+export function evidenceMode(value?:string):Mode {return value==='historical'?'historical':'current';}
 async function request(path:string,options?:RequestInit){
  const res=await fetch(`${API_BASE}/api/decision${path}`,{...options,cache:'no-store',signal:options?.signal??AbortSignal.timeout(60000)});
  if(!res.ok){let message='The evidence service could not complete this request.';try{const body=await res.json();message=typeof body.detail==='string'?body.detail:Array.isArray(body.detail)?body.detail.map((e:{msg:string})=>e.msg).join('; '):message;}catch{}throw new Error(message);}
@@ -21,5 +21,5 @@ async function request(path:string,options?:RequestInit){
 export async function getCatalog(mode:Mode):Promise<Catalog>{return (await request(`/catalog?mode=${mode}`)).json();}
 export async function getProfile(slug:string,mode:Mode):Promise<Profile>{return (await request(`/profile/${encodeURIComponent(slug)}?mode=${mode}`)).json();}
 export async function calculateScenario(profile:Profile,changes:Changes,signal?:AbortSignal):Promise<Result>{return (await request(`/simulate/${profile.slug}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:profile.mode,baseline_token:profile.baseline_token,changes}),signal})).json();}
-export async function exportReport(profile:Profile,changes:Changes,assumptions:Assumptions){const res=await request(`/report/${profile.slug}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:profile.mode,baseline_token:profile.baseline_token,changes,assumptions})});const blob=await res.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`rdti-${profile.slug}-research-plan.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+export async function exportReport(profile:Profile,changes:Changes,assumptions:Assumptions){const res=await request(`/report/${profile.slug}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:profile.mode,baseline_token:profile.baseline_token,changes,assumptions})});const blob=await res.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`poros-${profile.slug}-research-plan.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 export const evidenceDataURL=(profile:Profile)=>`${API_BASE}/api/decision/data/${profile.slug}?mode=${profile.mode}`;
