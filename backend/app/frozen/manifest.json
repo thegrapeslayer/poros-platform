@@ -1,0 +1,10 @@
+{
+  "archive_sha256": "c9af474969d5969a84fed7ba6aa4edadffa36ad28b38a319fa3036dd18e86232",
+  "source_database_sha256": "7a591f5c14608a3c9497a831e42f9695ace0e5c6ab2a52e4ed20efc9cf7c4622",
+  "source": "RDTI_manuscript_bundle (1) (1).zip / provenance/rdti_evidence_v3.sqlite",
+  "historical_cutoff": "2015-12-31",
+  "disease_count": 100,
+  "defined_variables": 29,
+  "scoreable_variables": 28,
+  "note": "Recovered supplied archive. All 100 stored historical scores reproduced; no new expert validation claimed."
+}

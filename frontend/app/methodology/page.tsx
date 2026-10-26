@@ -1,99 +1,13 @@
-import Link from "next/link";
-import { getMethodology } from "@/lib/api";
-
-export const metadata = { title: "How POROS works" };
-
-const ORDER = ["biological", "clinical", "regulatory", "economic", "infrastructure"];
-const LABELS: Record<string, string> = {
-  biological: "Biological tractability",
-  clinical: "Clinical development",
-  regulatory: "Regulatory pathway",
-  economic: "Economic sustainability",
-  infrastructure: "Translation infrastructure",
-};
-const EXPLAIN: Record<string, string> = {
-  biological: "Evidence for a defined mechanism, therapeutic targets, and models that support intervention.",
-  clinical: "Trial activity and the natural-history, registry, and outcome-measure tools trials depend on.",
-  regulatory: "Regulatory engagement such as orphan designations and relevant approval precedents.",
-  economic: "Funding and sponsor activity that can sustain development.",
-  infrastructure: "Patient organizations, biobanks, consortia, and clinical guidance that support translation.",
-};
-
-export default async function MethodologyPage() {
-  let methodology: Awaited<ReturnType<typeof getMethodology>> | null = null;
-  try { methodology = await getMethodology(); } catch { /* Explain the scoring model even when the API is offline. */ }
-  const domains = methodology?.domains ?? {};
-  const features = methodology?.features ?? {};
-
-  return <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
-    <div className="max-w-3xl">
-      <p className="eyebrow text-sage-dark">Clear by design</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink sm:text-4xl">How POROS works</h1>
-      <p className="mt-4 text-base leading-7 text-muted">POROS organizes public evidence about the conditions that shape rare disease translation. Every score can be read alongside its coverage and traced back to source records.</p>
-    </div>
-
-    <div className="mt-9 grid gap-4 md:grid-cols-3">
-      <SummaryCard number="01" title="Collect evidence" text="Structured records and published literature are gathered from public sources for each disease." />
-      <SummaryCard number="02" title="Assess five domains" text="Evidence is grouped into five parts of the translation environment, with each feature interpreted consistently." />
-      <SummaryCard number="03" title="Show risk with context" text="The overall score summarizes available domain scores. Completeness and evidence coverage stay visible beside it." />
-    </div>
-
-    <section className="mt-14">
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div><p className="eyebrow text-muted">The framework</p><h2 className="mt-1 text-2xl font-semibold tracking-tight text-ink">Five connected domains</h2></div>
-        <p className="text-xs text-muted">{Object.keys(features).length ? `${Object.keys(features).length} defined features` : "Evidence organized consistently"}</p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {ORDER.map((domain, index) => {
-          const items = Object.entries(features).filter(([, feature]) => feature.domain === domain);
-          return <article key={domain} className="rounded-2xl border border-line/70 bg-white/70 p-5">
-            <div className="flex items-center justify-between"><span className="text-xs font-semibold tracking-[.14em] text-sage-dark">0{index + 1}</span><span className="h-2 w-2 rounded-full bg-sage" /></div>
-            <h3 className="mt-5 text-lg font-semibold tracking-tight text-ink">{domains[domain] ?? LABELS[domain]}</h3>
-            <p className="mt-2 text-sm leading-6 text-muted">{EXPLAIN[domain]}</p>
-            {items.length > 0 && <details className="mt-4 border-t border-line/70 pt-3">
-              <summary className="cursor-pointer text-xs font-semibold text-sage-dark">View {items.length} features</summary>
-              <ul className="mt-3 space-y-2">{items.map(([id, feature]) => <li key={id} className="text-xs leading-5 text-ink/75"><strong className="font-medium text-ink">{feature.label}</strong><span className="block text-muted">{feature.description}</span></li>)}</ul>
-            </details>}
-          </article>;
-        })}
-      </div>
-    </section>
-
-    <section className="mt-14 grid gap-5 lg:grid-cols-[1fr_1.15fr]">
-      <div className="rounded-3xl bg-[#202a50] p-6 text-white sm:p-8">
-        <p className="eyebrow text-white/55">Reading a score</p>
-        <h2 className="mt-3 text-2xl font-semibold tracking-tight">Higher means more translation risk.</h2>
-        <p className="mt-3 text-sm leading-6 text-white/70">The Translation Risk Score is on a 0–100 scale. It is an evidence summary relative to the POROS cohort, not a measure of disease severity, research quality, or clinical prognosis.</p>
-        <div className="mt-6 grid grid-cols-3 gap-2 text-center">
-          <Band label="Low" range="0–32" tone="bg-[#a9baff]" />
-          <Band label="Moderate" range="33–65" tone="bg-[#e4bd78]" />
-          <Band label="High" range="66–100" tone="bg-[#e99aaa]" />
-        </div>
-      </div>
-      <div className="rounded-3xl border border-line/70 bg-white/70 p-6 sm:p-8">
-        <p className="eyebrow text-muted">Evidence with its limits</p>
-        <h2 className="mt-3 text-2xl font-semibold tracking-tight text-ink">Absence of evidence is not evidence of absence.</h2>
-        <div className="mt-5 space-y-4 text-sm leading-6 text-ink/75">
-          <p><strong className="text-ink">Structured data</strong> comes from public databases as counts, dates, amounts, or phases.</p>
-          <p><strong className="text-ink">Literature-derived evidence</strong> is identified using a consistent text-matching protocol over published records.</p>
-          <p>When retrieval fails or evidence cannot be ascertained, the feature stays unscored. Missing information is not converted into a favorable or unfavorable signal.</p>
-        </div>
-        {methodology && <p className="mt-5 border-t border-line/70 pt-4 text-xs text-muted">Model {methodology.model_version} · Extractor {methodology.extractor_version}</p>}
-      </div>
-    </section>
-
-    <div className="mt-12 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line/70 bg-white/55 p-5 sm:px-6">
-      <p className="text-sm text-ink/75">Ready to see the framework applied to actual disease records?</p>
-      <div className="flex gap-4 text-sm font-semibold text-sage-dark"><Link href="/diseases" className="hover:underline">Explore diseases →</Link><Link href="/compare" className="hover:underline">Compare →</Link></div>
-    </div>
-  </div>;
-}
-
-function SummaryCard({ number, title, text }: { number: string; title: string; text: string }) {
-  return <article className="rounded-2xl border border-line/70 bg-white/70 p-5"><p className="text-xs font-semibold tracking-[.14em] text-sage-dark">{number}</p><h2 className="mt-4 text-base font-semibold text-ink">{title}</h2><p className="mt-2 text-sm leading-6 text-muted">{text}</p></article>;
-}
-
-function Band({ label, range, tone }: { label: string; range: string; tone: string }) {
-  return <div className="rounded-xl bg-white/10 px-2 py-3"><span className={`mx-auto block h-1 w-6 rounded-full ${tone}`} /><p className="mt-2 text-xs font-medium">{label}</p><p className="mt-1 text-[10px] text-white/55">{range}</p></div>;
-}
-
+import Link from 'next/link';
+import {getMethodology} from '@/lib/api';
+export const dynamic='force-dynamic';
+export default async function Methodology(){let method=null;try{method=await getMethodology()}catch{}return <div className="page-shell max-w-4xl"><p className="eyebrow text-sage-dark">Transparent by design</p><h1 className="mt-3 text-4xl font-semibold tracking-tight">Understand the assessment.</h1><p className="mt-5 text-lg leading-8 text-muted">POROS summarizes documented evidence across five domains. RDTI lets you examine that evidence and investigate hypothetical changes without rewriting it.</p><div className="mt-8 space-y-5">{[
+ ['Readiness and translation risk','The original Translation Risk Score (TRS) runs from 0 to 100, with lower values indicating a more favorable evidence profile. The readiness display is exactly 100 minus TRS. It is not a probability of clinical success or a new validated index.'],
+ ['How the model aggregates evidence','Documentary criteria contribute risk 0 when supported, 100 when not confirmed, and no risk value when unknown. Structured values use empirical mid-rank percentiles from the reference cohort. Available feature risks are averaged within each domain; available domains are then averaged with equal weights. Missing domains remain unscored.'],
+ ['Historical POROS','The historical view uses the recovered manuscript archive with an evidence cutoff of December 31, 2015. The outcome window through December 31, 2025 was used for research validation and is not a scoring input. Archived inputs, scores and normalization references remain separate from the live database.'],
+ ['Current Evidence Explorer','New public records are retrieved through the existing ClinicalTrials.gov, Europe PMC/PubMed, NIH RePORTER and FDA adapters. When live inputs are missing or retrieval fails, dated archived current records are used where available. Each profile identifies the source and retrieval date. Current reference distributions include the fixed cohort’s available live and cached inputs.'],
+ ['What an evidence status means','Evidence not found means the search did not return qualifying support. Criterion not satisfied means a candidate record was found but did not meet the extraction rule. Not assessed and retrieval unsuccessful remain separate. Supporting evidence is an automated criterion decision, not independent expert verification. Ambiguous human review or disagreement is flagged for review.'],
+ ['What the simulator changes','The simulator accepts only variables designated modifiable in the original engine. It copies baseline inputs, changes selected values, and reruns the same scorer against the same reference distribution. Activities, estimated budgets and timelines do not directly affect scores. Saved scenarios preserve the baseline fingerprint and require recalculation if it changes.'],
+ ['The variable-count discrepancy','Your study description refers to 24 variables. The recovered executable archive and this repository contain 29 features, 28 of which contribute to scoring. RDTI displays all 29 instead of silently deleting or redefining inputs. The 24-variable description needs reconciliation against the original study materials before claiming equivalence.'],
+ ['Validation and limitations','Reproducing archived scores checks implementation consistency. It does not establish clinical validity, causal impact, or extractor precision. Documentary extraction remains rules-based and requires qualified human review. Historical publication cutoffs do not guarantee that every registry field is a preserved version from 2015. Scores should be discussed with domain experts alongside the original sources.']
+ ].map(([title,body])=><section key={title} className="surface p-6"><h2 className="text-lg font-semibold">{title}</h2><p className="mt-3 text-sm leading-7 text-muted">{body}</p></section>)}</div><section className="mt-10"><h2 className="text-2xl font-semibold">Executable variable dictionary</h2><p className="mt-3 text-xs text-muted">{method?`${method.model_version} · ${method.extractor_version}`:'The live model dictionary is unavailable.'}</p>{method&&<div className="mt-4 space-y-2">{Object.entries(method.features).map(([id,f])=><details key={id} className="surface p-4"><summary className="text-sm font-medium cursor-pointer">{f.label} <span className="text-xs text-muted">({f.domain}, type {f.type})</span></summary><p className="mt-3 text-sm leading-6 text-muted">{f.description||f.label}</p><p className="mt-2 text-xs text-muted">{f.scoreable?'Scored':'Context only'} · {f.modifiable?'Simulation allowed':'Fixed in the model'}</p><code className="mt-2 block text-xs text-muted">{id}</code></details>)}</div>}</section><Link href="/diseases" className="button-dark mt-8">Explore the evidence →</Link></div>}

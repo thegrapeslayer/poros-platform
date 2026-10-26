@@ -1,0 +1,3 @@
+import Link from 'next/link';
+import type {Mode} from '@/lib/decision';
+export default function EvidenceMode({mode,path}:{mode:Mode;path:string}){return <div><div className="mode-control" aria-label="Evidence period"><Link aria-current={mode==='historical'?'page':undefined} className={mode==='historical'?'selected':''} href={`${path}?mode=historical`}>Historical POROS</Link><Link aria-current={mode==='current'?'page':undefined} className={mode==='current'?'selected':''} href={`${path}?mode=current`}>Current evidence</Link></div><p className="mt-2 text-xs text-muted">{mode==='historical'?'Original archive · evidence cutoff December 31, 2015':'Latest available records · retrieval dates shown per source'}</p></div>}

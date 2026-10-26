@@ -12,6 +12,7 @@ Next.js frontend (or anything else) can drive them.
 import io
 import re
 import traceback
+import threading
 from typing import Any
 
 import pandas as pd
@@ -21,6 +22,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from . import engine as eng
+from . import retrieval
 
 app = FastAPI(title="POROS API", version=eng.APP_VERSION)
 
@@ -332,29 +334,39 @@ def provenance_summary() -> dict[str, Any]:
 # and will take a while for the full portfolio, so it runs in the background.
 # -----------------------------------------------------------------------------
 
+_refresh_lock = threading.Lock()
+
 _refresh_status: dict[str, Any] = {"running": False, "done": 0, "total": 0, "errors": []}
 
 
 def _run_refresh(diseases: list[str], as_of_date: str | None, force_refresh: bool) -> None:
-    _refresh_status.update(running=True, done=0, total=len(diseases), errors=[])
-    for name in diseases:
-        try:
-            eng.build_disease_snapshot(name, as_of_date=as_of_date, force_refresh=force_refresh)
-        except Exception as e:
-            _refresh_status["errors"].append({"disease": name, "error": str(e), "trace": traceback.format_exc()})
-        finally:
-            _refresh_status["done"] += 1
-    snap = eng.snapshot_key(as_of_date)
-    cohort_id = portfolio_cohort_id()
-    eng.fit_reference_stats(eng.get_disease_ids_for_names(diseases), snap, cohort_id)
-    _refresh_status["running"] = False
+    try:
+        for name in diseases:
+            try:
+                result = retrieval.refresh_snapshot(name, as_of_date=as_of_date, force_refresh=force_refresh)
+                for message in result.get("errors", []):
+                    _refresh_status["errors"].append({"disease": name, "error": str(message)})
+            except Exception as exc:
+                _refresh_status["errors"].append({"disease": name, "error": str(exc)})
+            finally:
+                _refresh_status["done"] += 1
+        snap = eng.snapshot_key(as_of_date)
+        eng.fit_reference_stats(eng.get_disease_ids_for_names(PORTFOLIO), snap, portfolio_cohort_id())
+    except Exception as exc:
+        _refresh_status["errors"].append({"disease": "Reference cohort", "error": str(exc)})
+    finally:
+        _refresh_status["running"] = False
 
 
 @app.post("/api/admin/refresh")
 def admin_refresh(req: RefreshRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
-    if _refresh_status["running"]:
-        raise HTTPException(409, "A refresh is already running.")
     diseases = req.diseases or PORTFOLIO
+    if any(name not in PORTFOLIO for name in diseases):
+        raise HTTPException(422, "Choose a disease from the fixed portfolio.")
+    with _refresh_lock:
+        if _refresh_status["running"]:
+            raise HTTPException(409, "A refresh is already running.")
+        _refresh_status.update(running=True, done=0, total=len(diseases), errors=[])
     background_tasks.add_task(_run_refresh, diseases, req.as_of_date, req.force_refresh)
     return {"started": True, "count": len(diseases)}
 
@@ -686,3 +698,9 @@ def research_smoke_test() -> dict[str, Any]:
     logic behaves correctly (e.g. confirming a modifiable feature can only
     ever lower or hold risk, never raise it). No network calls."""
     return eng.smoke_test_math()
+
+
+
+# Public decision support: immutable archive, separate current evidence, pure scenarios.
+from .decision_routes import router as decision_router
+app.include_router(decision_router)

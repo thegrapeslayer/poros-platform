@@ -7,7 +7,7 @@ type PorosLogoProps = {
 
 export default function PorosLogo({ compact = false, className = "" }: PorosLogoProps) {
   return (
-    <Link href="/" aria-label="POROS home" className={`inline-flex items-center gap-3 ${className}`}>
+    <Link href="/" aria-label="RDTI home" className={`inline-flex items-center gap-3 ${className}`}>
       <svg viewBox="0 0 192 192" aria-hidden="true" className={compact ? "h-8 w-8" : "h-9 w-9"}>
         <path
           d="M88 30 C50 34 28 60 28 96 C28 132 50 158 88 162"
@@ -29,7 +29,7 @@ export default function PorosLogo({ compact = false, className = "" }: PorosLogo
       </svg>
 
       <span className="leading-none">
-        <span className="block font-display text-xl font-semibold tracking-tight text-ink">POROS</span>
+        <span className="block font-display text-xl font-semibold tracking-tight text-ink">RDTI</span>
         {!compact && (
           <span className="eyebrow text-muted hidden sm:block mt-0.5">Translation Intelligence</span>
         )}

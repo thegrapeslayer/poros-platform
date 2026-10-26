@@ -122,7 +122,7 @@ export function startAdminRefresh(diseases?: string[]) {
   return getJSON<{ started: boolean; count: number }>("/api/admin/refresh", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ diseases }),
+    body: JSON.stringify({ diseases, force_refresh: true }),
   });
 }
 
